@@ -1,0 +1,97 @@
+import kotlin.Boolean;
+
+CREATE TABLE rss_feed (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    url TEXT NOT NULL UNIQUE,
+    title TEXT NOT NULL DEFAULT '',
+    enabled INTEGER AS Boolean NOT NULL DEFAULT 1,
+    last_checked INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE rss_rule (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    feed_id INTEGER,
+    include_pattern TEXT NOT NULL DEFAULT '',
+    exclude_pattern TEXT NOT NULL DEFAULT '',
+    use_regex INTEGER AS Boolean NOT NULL DEFAULT 0,
+    category TEXT,
+    save_path TEXT NOT NULL DEFAULT '',
+    start_paused INTEGER AS Boolean NOT NULL DEFAULT 0,
+    enabled INTEGER AS Boolean NOT NULL DEFAULT 1
+);
+
+CREATE TABLE rss_item (
+    feed_id INTEGER NOT NULL,
+    guid TEXT NOT NULL,
+    title TEXT NOT NULL,
+    link TEXT NOT NULL,
+    published INTEGER NOT NULL DEFAULT 0,
+    size INTEGER NOT NULL DEFAULT 0,
+    downloaded INTEGER AS Boolean NOT NULL DEFAULT 0,
+    seen_at INTEGER NOT NULL,
+    PRIMARY KEY (feed_id, guid)
+);
+
+CREATE INDEX rss_item_feed ON rss_item(feed_id, published);
+
+selectFeeds:
+SELECT * FROM rss_feed ORDER BY title, url;
+
+insertFeed:
+INSERT OR IGNORE INTO rss_feed(url, title, enabled) VALUES (?, ?, ?);
+
+updateFeedTitle:
+UPDATE rss_feed SET title = ? WHERE id = ?;
+
+setFeedEnabled:
+UPDATE rss_feed SET enabled = ? WHERE id = ?;
+
+markFeedChecked:
+UPDATE rss_feed SET last_checked = ?, last_error = ? WHERE id = ?;
+
+deleteFeed:
+DELETE FROM rss_feed WHERE id = ?;
+
+deleteItemsOfFeed:
+DELETE FROM rss_item WHERE feed_id = ?;
+
+selectRules:
+SELECT * FROM rss_rule ORDER BY name;
+
+insertRule:
+INSERT INTO rss_rule(name, feed_id, include_pattern, exclude_pattern, use_regex, category, save_path, start_paused, enabled)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+updateRule:
+UPDATE rss_rule SET name = ?, feed_id = ?, include_pattern = ?, exclude_pattern = ?, use_regex = ?, category = ?,
+    save_path = ?, start_paused = ?, enabled = ?
+WHERE id = ?;
+
+deleteRule:
+DELETE FROM rss_rule WHERE id = ?;
+
+insertItem:
+INSERT OR IGNORE INTO rss_item(feed_id, guid, title, link, published, size, downloaded, seen_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+
+markItemDownloaded:
+UPDATE rss_item SET downloaded = 1 WHERE feed_id = ? AND guid = ?;
+
+selectItems:
+SELECT * FROM rss_item WHERE feed_id = ? ORDER BY published DESC, seen_at DESC LIMIT ?;
+
+selectRecentItems:
+SELECT * FROM rss_item ORDER BY published DESC, seen_at DESC LIMIT ?;
+
+itemExists:
+SELECT COUNT(*) FROM rss_item WHERE feed_id = ? AND guid = ?;
+
+trimItems:
+DELETE FROM rss_item WHERE feed_id = ? AND guid NOT IN (
+    SELECT guid FROM rss_item WHERE feed_id = ? ORDER BY published DESC, seen_at DESC LIMIT ?
+);
+
+lastInsertRowId:
+SELECT last_insert_rowid();

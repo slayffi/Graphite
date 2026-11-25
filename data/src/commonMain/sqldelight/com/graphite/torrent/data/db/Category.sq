@@ -1,0 +1,13 @@
+CREATE TABLE category (
+    name TEXT NOT NULL PRIMARY KEY,
+    save_path TEXT NOT NULL DEFAULT ''
+);
+
+selectAll:
+SELECT * FROM category ORDER BY name;
+
+upsert:
+INSERT OR REPLACE INTO category(name, save_path) VALUES (?, ?);
+
+deleteByName:
+DELETE FROM category WHERE name = ?;

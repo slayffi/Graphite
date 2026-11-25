@@ -1,0 +1,68 @@
+-- User metadata for torrents. Download state itself lives in libtorrent resume data.
+CREATE TABLE torrent (
+    id TEXT NOT NULL PRIMARY KEY,
+    name TEXT NOT NULL,
+    category TEXT,
+    added_at INTEGER NOT NULL,
+    completed_at INTEGER NOT NULL DEFAULT 0,
+    save_path TEXT NOT NULL DEFAULT '',
+    final_location TEXT,
+    total_size INTEGER NOT NULL DEFAULT 0,
+    source TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE torrent_tag (
+    torrent_id TEXT NOT NULL,
+    tag TEXT NOT NULL,
+    PRIMARY KEY (torrent_id, tag)
+);
+
+selectAll:
+SELECT * FROM torrent;
+
+selectById:
+SELECT * FROM torrent WHERE id = ?;
+
+insertIfMissing:
+INSERT OR IGNORE INTO torrent(id, name, category, added_at, completed_at, save_path, final_location, total_size, source)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+insertOrReplace:
+INSERT OR REPLACE INTO torrent(id, name, category, added_at, completed_at, save_path, final_location, total_size, source)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+updateInfo:
+UPDATE torrent SET name = ?, save_path = ?, total_size = ? WHERE id = ?;
+
+setCategory:
+UPDATE torrent SET category = ? WHERE id = ?;
+
+markCompleted:
+UPDATE torrent SET completed_at = ? WHERE id = ? AND completed_at = 0;
+
+setFinalLocation:
+UPDATE torrent SET final_location = ? WHERE id = ?;
+
+setSavePath:
+UPDATE torrent SET save_path = ? WHERE id = ?;
+
+clearCategory:
+UPDATE torrent SET category = NULL WHERE category = ?;
+
+deleteById:
+DELETE FROM torrent WHERE id = ?;
+
+selectAllTags:
+SELECT * FROM torrent_tag;
+
+selectTagsFor:
+SELECT tag FROM torrent_tag WHERE torrent_id = ? ORDER BY tag;
+
+distinctTags:
+SELECT DISTINCT tag FROM torrent_tag ORDER BY tag;
+
+insertTag:
+INSERT OR IGNORE INTO torrent_tag(torrent_id, tag) VALUES (?, ?);
+
+deleteTagsFor:
+DELETE FROM torrent_tag WHERE torrent_id = ?;

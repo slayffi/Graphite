@@ -1,0 +1,43 @@
+-- Traffic per local day (epoch day number).
+CREATE TABLE daily_stats (
+    day INTEGER NOT NULL PRIMARY KEY,
+    downloaded INTEGER NOT NULL DEFAULT 0,
+    uploaded INTEGER NOT NULL DEFAULT 0,
+    completed INTEGER NOT NULL DEFAULT 0,
+    added INTEGER NOT NULL DEFAULT 0,
+    peak_rate INTEGER NOT NULL DEFAULT 0,
+    active_seconds INTEGER NOT NULL DEFAULT 0
+);
+
+ensureDay:
+INSERT OR IGNORE INTO daily_stats(day) VALUES (?);
+
+addTraffic:
+UPDATE daily_stats
+SET downloaded = downloaded + :downloaded,
+    uploaded = uploaded + :uploaded,
+    active_seconds = active_seconds + :activeSeconds,
+    peak_rate = max(peak_rate, :peakRate)
+WHERE day = :day;
+
+incrementCompleted:
+UPDATE daily_stats SET completed = completed + 1 WHERE day = ?;
+
+incrementAdded:
+UPDATE daily_stats SET added = added + 1 WHERE day = ?;
+
+selectRange:
+SELECT * FROM daily_stats WHERE day BETWEEN ? AND ? ORDER BY day;
+
+totals:
+SELECT
+    coalesce(sum(downloaded), 0) AS downloaded,
+    coalesce(sum(uploaded), 0) AS uploaded,
+    coalesce(sum(completed), 0) AS completed,
+    coalesce(sum(added), 0) AS added,
+    coalesce(max(peak_rate), 0) AS peak_rate,
+    coalesce(sum(active_seconds), 0) AS active_seconds
+FROM daily_stats WHERE day BETWEEN ? AND ?;
+
+clearAll:
+DELETE FROM daily_stats;

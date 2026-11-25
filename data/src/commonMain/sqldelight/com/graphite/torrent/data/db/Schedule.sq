@@ -1,0 +1,33 @@
+import kotlin.Boolean;
+
+-- days: bit mask, Monday = 1, Tuesday = 2, ... Sunday = 64.
+-- Minutes are minutes after midnight; end < start means the rule crosses midnight.
+CREATE TABLE schedule_rule (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    days INTEGER NOT NULL,
+    start_minute INTEGER NOT NULL,
+    end_minute INTEGER NOT NULL,
+    action TEXT NOT NULL,
+    download_kbps INTEGER NOT NULL DEFAULT 0,
+    upload_kbps INTEGER NOT NULL DEFAULT 0,
+    profile TEXT,
+    enabled INTEGER AS Boolean NOT NULL DEFAULT 1
+);
+
+selectAll:
+SELECT * FROM schedule_rule ORDER BY start_minute, id;
+
+insertRule:
+INSERT INTO schedule_rule(days, start_minute, end_minute, action, download_kbps, upload_kbps, profile, enabled)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+
+updateRule:
+UPDATE schedule_rule SET days = ?, start_minute = ?, end_minute = ?, action = ?, download_kbps = ?, upload_kbps = ?,
+    profile = ?, enabled = ?
+WHERE id = ?;
+
+deleteRule:
+DELETE FROM schedule_rule WHERE id = ?;
+
+deleteAll:
+DELETE FROM schedule_rule;

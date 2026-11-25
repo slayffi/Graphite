@@ -1,0 +1,24 @@
+-- Append-only history of what happened to downloads.
+CREATE TABLE history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    torrent_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    event TEXT NOT NULL,
+    timestamp INTEGER NOT NULL,
+    location TEXT NOT NULL DEFAULT ''
+);
+
+CREATE INDEX history_timestamp ON history(timestamp);
+
+insert:
+INSERT INTO history(torrent_id, name, size, event, timestamp, location) VALUES (?, ?, ?, ?, ?, ?);
+
+selectRecent:
+SELECT * FROM history ORDER BY timestamp DESC, id DESC LIMIT ?;
+
+countEventsSince:
+SELECT COUNT(*) FROM history WHERE event = ? AND timestamp >= ?;
+
+clearAll:
+DELETE FROM history;

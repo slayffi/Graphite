@@ -1,0 +1,21 @@
+CREATE TABLE event_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp INTEGER NOT NULL,
+    level TEXT NOT NULL,
+    type TEXT NOT NULL,
+    torrent_id TEXT,
+    subject TEXT NOT NULL DEFAULT '',
+    detail TEXT NOT NULL DEFAULT ''
+);
+
+insert:
+INSERT INTO event_log(timestamp, level, type, torrent_id, subject, detail) VALUES (?, ?, ?, ?, ?, ?);
+
+selectRecent:
+SELECT * FROM event_log ORDER BY id DESC LIMIT ?;
+
+trim:
+DELETE FROM event_log WHERE id NOT IN (SELECT id FROM event_log ORDER BY id DESC LIMIT ?);
+
+clearAll:
+DELETE FROM event_log;
