@@ -30,3 +30,4 @@ rootProject.name = "Graphite"
 
 include(":core")
 include(":data")
+include(":ui:designsystem")
