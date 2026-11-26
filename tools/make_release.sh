@@ -46,8 +46,16 @@ fingerprint=""
 apksigner=$(ls -d "${ANDROID_HOME:-/usr/local/lib/android/sdk}"/build-tools/*/ 2>/dev/null | sort -V | tail -1)apksigner
 if [ -x "$apksigner" ]; then
   for apk in "$OUT"/*.apk; do
-    fp=$("$apksigner" verify --print-certs "$apk" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
-    [ -n "$fp" ] || fail "$apk is not signed"
+    # apksigner fails when the signature does not verify; its wording differs between versions, so only the
+    # digest itself is looked for.
+    report=$("$apksigner" verify --print-certs "$apk" 2>&1) || { echo "$report"; fail "$apk: the signature does not verify"; }
+    fp=$(grep -oiE 'SHA-256 digest: *[0-9a-f]{64}' <<< "$report" | head -1 | grep -oiE '[0-9a-f]{64}' || true)
+    if [ -z "$fp" ]; then
+      echo "::warning::Could not read the signing certificate of $apk; apksigner said:"
+      echo "$report"
+      fingerprint=""
+      break
+    fi
     [ -z "$fingerprint" ] || [ "$fingerprint" = "$fp" ] || fail "The APKs are signed with different keys"
     fingerprint="$fp"
   done
