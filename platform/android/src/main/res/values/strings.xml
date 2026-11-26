@@ -24,4 +24,10 @@
         <item quantity="one">%1$d downloading</item>
         <item quantity="other">%1$d downloading</item>
     </plurals>
+    <string name="crash_title">Graphite stopped because of an error</string>
+    <string name="crash_message">Copy the report and send it to the developer. It contains only the error, the app version and the device model.</string>
+    <string name="crash_copy">Copy</string>
+    <string name="crash_copied">Report copied</string>
+    <string name="crash_share">Share</string>
+    <string name="crash_restart">Restart</string>
 </resources>

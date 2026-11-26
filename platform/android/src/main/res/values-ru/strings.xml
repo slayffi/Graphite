@@ -26,4 +26,10 @@
         <item quantity="many">%1$d загрузок</item>
         <item quantity="other">%1$d загрузки</item>
     </plurals>
+    <string name="crash_title">Graphite остановился из-за ошибки</string>
+    <string name="crash_message">Скопируйте отчёт и отправьте разработчику. В нём только ошибка, версия приложения и модель устройства.</string>
+    <string name="crash_copy">Скопировать</string>
+    <string name="crash_copied">Отчёт скопирован</string>
+    <string name="crash_share">Поделиться</string>
+    <string name="crash_restart">Перезапустить</string>
 </resources>

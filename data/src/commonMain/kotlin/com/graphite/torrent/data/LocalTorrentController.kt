@@ -57,6 +57,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
@@ -96,6 +98,7 @@ class LocalTorrentController(
     private val lastFailureNotice = ConcurrentHashMap<String, Long>()
     private val jobs = ArrayList<Job>()
     @Volatile private var started = false
+    private val lifecycle = Mutex()
 
     override val session: StateFlow<SessionSnapshot> = engine.session
     override val speedHistory: StateFlow<List<SpeedSample>> = _speed.asStateFlow()
@@ -111,8 +114,12 @@ class LocalTorrentController(
     // Lifecycle
     // ---------------------------------------------------------------------------------------------
 
-    suspend fun start() {
-        if (started) return
+    /**
+     * Starts the engine once. Safe to call from several places at the same time (on Android the
+     * application and the activity both ask for it right after launch).
+     */
+    suspend fun start() = lifecycle.withLock {
+        if (started) return@withLock
         started = true
         var settings = settingsRepository.current()
         if (settings.listenPort == 0) {
@@ -143,8 +150,8 @@ class LocalTorrentController(
         }
     }
 
-    suspend fun stop() {
-        if (!started) return
+    suspend fun stop() = lifecycle.withLock {
+        if (!started) return@withLock
         flushStats()
         jobs.forEach { it.cancel() }
         jobs.clear()

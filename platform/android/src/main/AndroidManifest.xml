@@ -79,6 +79,15 @@
             </intent-filter>
         </activity>
 
+        <!-- Error report; its own process so it works even when the main process cannot start. -->
+        <activity
+            android:name=".android.CrashActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:process=":crash"
+            android:taskAffinity="com.graphite.torrent.crash"
+            android:theme="@android:style/Theme.Material.NoActionBar" />
+
         <activity
             android:name=".android.QrScannerActivity"
             android:exported="false"

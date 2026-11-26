@@ -7,6 +7,7 @@ import com.graphite.torrent.data.GraphiteServices
 import com.graphite.torrent.data.automation.FileWatchFolderSource
 import com.graphite.torrent.ui.app.AppEnvironment
 import com.graphite.torrent.ui.app.AppFeatures
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.combine
@@ -34,6 +35,9 @@ class GraphiteApplication : Application() {
     @OptIn(FlowPreview::class)
     override fun onCreate() {
         super.onCreate()
+        // The crash screen runs in its own process and needs none of the services.
+        if (CrashReporter.isCrashProcess(this)) return
+        CrashReporter.install(this)
         Notifications.createChannels(this)
         val storage = AndroidStorage(this)
         services = GraphiteServices.create(
@@ -63,9 +67,16 @@ class GraphiteApplication : Application() {
             ),
         )
         services.scope.launch {
-            services.controller.start()
-            services.startAutomation()
-            remote.restore()
+            try {
+                services.controller.start()
+                services.startAutomation()
+                remote.restore()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Without the engine the app is useless: show what went wrong instead of an empty list.
+                CrashReporter.report(this@GraphiteApplication, e)
+            }
         }
         PowerNetworkMonitor(this, services.settings, services.controller, services.scope).start()
 

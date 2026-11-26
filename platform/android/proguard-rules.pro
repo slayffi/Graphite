@@ -1,3 +1,6 @@
+# Open-source app: keep class and method names so crash reports are readable as is.
+-dontobfuscate
+
 # libtorrent4j: JNI code calls back into these classes by name.
 -keep class org.libtorrent4j.** { *; }
 -keepclassmembers class org.libtorrent4j.** { *; }
