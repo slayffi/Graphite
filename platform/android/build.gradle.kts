@@ -15,22 +15,16 @@ android {
         versionName = "1.0.0"
     }
 
+    // CI passes a real keystore through environment variables. Without one the release APK is signed
+    // with the debug key (AGP creates it on a clean machine) so that it is still installable.
+    val releaseKeystore = System.getenv("GRAPHITE_KEYSTORE_FILE")?.takeIf { it.isNotBlank() && file(it).exists() }
     signingConfigs {
-        create("release") {
-            // CI passes a real keystore through environment variables; otherwise the debug key is used
-            // so that the release APK is still installable.
-            val keystore = System.getenv("GRAPHITE_KEYSTORE_FILE")
-            if (!keystore.isNullOrBlank() && file(keystore).exists()) {
-                storeFile = file(keystore)
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = file(releaseKeystore)
                 storePassword = System.getenv("GRAPHITE_KEYSTORE_PASSWORD")
                 keyAlias = System.getenv("GRAPHITE_KEY_ALIAS")
                 keyPassword = System.getenv("GRAPHITE_KEY_PASSWORD")
-            } else {
-                val debug = getByName("debug")
-                storeFile = debug.storeFile
-                storePassword = debug.storePassword
-                keyAlias = debug.keyAlias
-                keyPassword = debug.keyPassword
             }
         }
     }
@@ -40,7 +34,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = signingConfigs.getByName(if (releaseKeystore != null) "release" else "debug")
         }
         debug {
             applicationIdSuffix = ".debug"
