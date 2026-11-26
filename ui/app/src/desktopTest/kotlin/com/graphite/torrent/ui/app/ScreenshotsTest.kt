@@ -1,5 +1,10 @@
 package com.graphite.torrent.ui.app
 
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
+import com.graphite.torrent.ui.designsystem.platform.PlatformKind
+import com.graphite.torrent.ui.designsystem.platform.platformOverride
 import androidx.compose.ui.graphics.asSkiaBitmap
 import androidx.compose.ui.test.DesktopComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
@@ -98,6 +103,51 @@ class ScreenshotsTest {
         click(hasText("Продолжить") and hasClickAction())
         waitFor(hasText("Что скачать"))
         save("add-preview")
+    }
+
+    /** The phone layout (what Android shows), rendered at 2x for review: bottom bar, full-screen details, bottom sheets. */
+    @Test
+    fun phoneScreens() = runDesktopComposeUiTest(824, 1830) {
+        platformOverride = PlatformKind.ANDROID
+        try {
+            seedDemoData()
+            harness.start()
+            feedSpeedHistory()
+            setContent {
+                CompositionLocalProvider(LocalDensity provides Density(2f)) {
+                    GraphiteApp(harness.env, showSplash = false)
+                }
+            }
+            waitFor(hasContentDescription("Sintel.2010.2160p.HDR"))
+            save("phone-downloads")
+
+            click(hasContentDescription("Sintel.2010.2160p.HDR") and hasClickAction())
+            waitFor(hasText("Файлы"))
+            save("phone-details")
+            click(hasText("Файлы") and hasClickAction())
+            mainClock.advanceTimeBy(2_000)
+            save("phone-details-files")
+            click(hasContentDescription("Назад") and hasClickAction())
+
+            click(hasText("Статистика") and hasClickAction())
+            waitFor(hasText("Неделя"))
+            save("phone-statistics")
+
+            click(hasText("Настройки") and hasClickAction())
+            waitFor(hasText("Нулевая отдача"))
+            save("phone-settings")
+
+            click(hasText("Загрузки") and hasClickAction())
+            click(hasContentDescription("Добавить загрузку") and hasClickAction())
+            waitFor(hasSetTextAction())
+            save("phone-add")
+            onNode(hasSetTextAction()).performTextInput("magnet:?xt=urn:btih:08ada5a7a6183aae1e09d831df6748d566095a10&dn=Sintel")
+            click(hasText("Продолжить") and hasClickAction())
+            waitFor(hasText("Что скачать"))
+            save("phone-add-preview")
+        } finally {
+            platformOverride = null
+        }
     }
 
     private fun seedDemoData() {
