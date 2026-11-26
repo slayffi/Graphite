@@ -69,7 +69,7 @@
 
 ### CI
 
-[`.github/workflows/build.yml`](.github/workflows/build.yml) на каждый коммит: тесты на Ubuntu, APK на Ubuntu (релизный APK запускается на эмуляторе Android 14 — если он не стартует, сборка падает), MSI на Windows (с libVLC). Артефакты: `graphite-android`, `graphite-windows`, `test-reports`. Для подписанного релиза добавьте секреты `GRAPHITE_KEYSTORE_BASE64`, `GRAPHITE_KEYSTORE_PASSWORD`, `GRAPHITE_KEY_ALIAS`, `GRAPHITE_KEY_PASSWORD`.
+[`.github/workflows/build.yml`](.github/workflows/build.yml) на каждый коммит: тесты на Ubuntu, APK на Ubuntu, запуск релизного APK на эмуляторе Android 14 (если приложение не стартует, задача падает; на раннерах без аппаратного ускорения проверка пропускается с предупреждением), MSI на Windows (с libVLC). Артефакты: `graphite-android`, `graphite-windows`, `test-reports`. Для подписанного релиза добавьте секреты `GRAPHITE_KEYSTORE_BASE64`, `GRAPHITE_KEYSTORE_PASSWORD`, `GRAPHITE_KEY_ALIAS`, `GRAPHITE_KEY_PASSWORD`.
 
 ## Архитектура
 

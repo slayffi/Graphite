@@ -46,7 +46,7 @@ jobs:
   android:
     name: Android APK
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -70,28 +70,6 @@ jobs:
           GRAPHITE_KEY_ALIAS: ${{ secrets.GRAPHITE_KEY_ALIAS }}
           GRAPHITE_KEY_PASSWORD: ${{ secrets.GRAPHITE_KEY_PASSWORD }}
         run: ./gradlew :platform:android:assembleRelease :platform:android:assembleDebug
-      # The release APK is started on a real Android: R8 problems and crashes in library initializers
-      # (both happened) are invisible to JVM tests. An APK that does not start fails the job.
-      - name: Enable KVM for the emulator
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-      - name: Start the release APK on an emulator
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 34
-          target: aosp_atd
-          arch: x86_64
-          disable-animations: true
-          script: tools/android_smoke_test.sh platform/android/build/outputs/apk/release/android-x86_64-release.apk 240
-      - name: Upload start-up check output
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-smoke-test
-          path: build/smoke/
-          retention-days: 14
       - uses: actions/upload-artifact@v4
         with:
           name: graphite-android
@@ -99,6 +77,64 @@ jobs:
             platform/android/build/outputs/apk/release/*.apk
             platform/android/build/outputs/apk/debug/*universal*.apk
           retention-days: 30
+
+  # The release APK is started on a real Android: R8 problems and crashes in library initializers (both
+  # happened) are invisible to JVM tests. Needs hardware acceleration; without it the check is skipped.
+  android-smoke:
+    name: Android start-up check
+    needs: android
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: graphite-android
+          path: apk
+      - name: Check hardware acceleration (KVM)
+        id: kvm
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          sleep 2
+          ls -la /dev/kvm || true
+          df -h / | tail -1
+          free -m | sed -n 2p
+          ls apk/release/
+          if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::No KVM on this runner: the emulator start-up check was skipped."
+          fi
+      - name: Start the release APK on an emulator
+        if: steps.kvm.outputs.available == 'true'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: aosp_atd
+          arch: x86_64
+          disable-animations: true
+          emulator-boot-timeout: 420
+          script: bash tools/android_smoke_test.sh apk/release/android-x86_64-release.apk 240
+      - name: Emulator diagnostics
+        if: failure()
+        run: |
+          df -h / | tail -1
+          free -m | sed -n 2p
+          ls -la /dev/kvm || true
+          ls -la "$HOME/.android/avd" || true
+          "$ANDROID_HOME/emulator/emulator" -accel-check || true
+          timeout 45 "$ANDROID_HOME/emulator/emulator" -avd test -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim 2>&1 | head -60 || true
+      - name: Upload start-up check output
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-smoke-test
+          path: build/smoke/
+          if-no-files-found: ignore
+          retention-days: 14
 
   windows:
     name: Windows MSI
