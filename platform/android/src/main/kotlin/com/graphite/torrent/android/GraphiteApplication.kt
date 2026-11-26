@@ -47,6 +47,8 @@ class GraphiteApplication : Application() {
         super.attachBaseContext(base)
         if (CrashReporter.isCrashProcess()) return
         // Runs before content providers and onCreate, so even very early failures are caught next time.
+        // The watchdog goes first: everything after it, StartupGuard included, is covered.
+        StartupGuard.watchMainThread(base)
         safeModeReport = runCatching { StartupGuard.begin(base) }.getOrNull()
     }
 
@@ -57,7 +59,6 @@ class GraphiteApplication : Application() {
         if (CrashReporter.isCrashProcess()) return
         CrashReporter.install(this)
         StartupGuard.step("onCreate")
-        if (safeModeReport == null) StartupGuard.watchMainThread(this)
         if (safeModeReport != null) {
             // The previous start failed: MainActivity shows the report instead of starting the engine again.
             StartupGuard.step(StartupGuard.SAFE_MODE)

@@ -108,10 +108,20 @@ object ReportScreen {
         root.addView(text(activity.getString(R.string.crash_title), 20f, TEXT, bold = true))
         root.addView(text(activity.getString(R.string.crash_message), 14f, SECONDARY).apply { setPadding(0, dp(8), 0, dp(16)) })
 
+        var fullReport = report
         val trace = text(report, 11f, TEXT).apply {
             typeface = Typeface.MONOSPACE
             setTextIsSelectable(true)
             setPadding(dp(12), dp(12), dp(12), dp(12))
+        }
+        // The app's own log lines are added once read (in the background, it can be slow).
+        if ("== Log ==" !in report) {
+            StartupGuard.collectLogAsync { log ->
+                if (log.isNotBlank()) activity.runOnUiThread {
+                    fullReport = "$report\n\n== Log ==\n$log"
+                    trace.text = fullReport
+                }
+            }
         }
         val box = ScrollView(activity).apply {
             background = GradientDrawable().apply { setColor(SURFACE); cornerRadius = dp(12).toFloat(); setStroke(dp(1), BORDER) }
@@ -126,10 +136,10 @@ object ReportScreen {
         }
         buttons.addView(button(activity.getString(R.string.crash_restart), primary = false) { restart(activity) })
         buttons.addView(button(activity.getString(R.string.crash_share), primary = false) {
-            activity.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, report), null))
+            activity.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, fullReport), null))
         })
         buttons.addView(button(activity.getString(R.string.crash_copy), primary = true) {
-            activity.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("Graphite report", report))
+            activity.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("Graphite report", fullReport))
             Toast.makeText(activity, R.string.crash_copied, Toast.LENGTH_SHORT).show()
         })
         root.addView(buttons)

@@ -75,7 +75,7 @@ object StartupGuard {
                     // Try to show the report now; firmwares that block it get it on the next start.
                     // The frozen process is ended either way so the user is not left on a splash screen.
                     val steps = runCatching { dir?.let { File(it, MARKER).readText() } }.getOrNull()
-                    runCatching { CrashReporter.showFrom(context, buildReport(context, steps, null)) }
+                    runCatching { CrashReporter.showFrom(context, buildReport(context, steps, null, withLog = true)) }
                     Thread.sleep(2_000)
                     Process.killProcess(Process.myPid())
                     return@thread
@@ -88,7 +88,7 @@ object StartupGuard {
     /** Report about the current start (steps so far and where every thread is), for a start that is stuck. */
     fun reportNow(context: Context): String {
         val steps = runCatching { dir?.let { File(it, MARKER).readText() } }.getOrNull()
-        return buildReport(context, steps, null) + "\n== Threads ==\n" + threadDump()
+        return buildReport(context, steps, null, withLog = true) + "\n== Threads ==\n" + threadDump()
     }
 
     private fun threadDump(): String = buildString {
@@ -144,7 +144,7 @@ object StartupGuard {
             .firstOrNull { it.timestamp > since && it.processName == context.packageName && it.reason in abnormal }
     }
 
-    private fun buildReport(context: Context, steps: String?, exit: Any?): String = buildString {
+    private fun buildReport(context: Context, steps: String?, exit: Any?, withLog: Boolean = false): String = buildString {
         appendLine("Graphite ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}, ${BuildConfig.BUILD_TYPE})")
         appendLine("Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}), ${Build.MANUFACTURER} ${Build.MODEL}")
         appendLine("ABI: ${Build.SUPPORTED_ABIS.joinToString()}")
@@ -155,12 +155,20 @@ object StartupGuard {
             appendLine()
             appendExit(exit as ApplicationExitInfo)
         }
-        val log = ownLog()
-        if (log.isNotBlank()) {
-            appendLine()
-            appendLine("== Log ==")
-            append(log)
+        // Reading the log can be slow or hang on some firmwares: never on the main thread during start.
+        if (withLog) {
+            val log = ownLog()
+            if (log.isNotBlank()) {
+                appendLine()
+                appendLine("== Log ==")
+                append(log)
+            }
         }
+    }
+
+    /** Collects this app's recent error log lines in the background (hard 4 s limit). */
+    fun collectLogAsync(onReady: (String) -> Unit) {
+        thread(name = "graphite-report-log", isDaemon = true) { onReady(ownLog()) }
     }
 
     @RequiresApi(Build.VERSION_CODES.R)
@@ -207,10 +215,14 @@ object StartupGuard {
 
     /** Errors this app logged recently (apps may read their own log lines, including the crashed process). */
     private fun ownLog(): String = runCatching {
-        val process = ProcessBuilder("logcat", "-d", "-v", "threadtime", "-t", "3000").redirectErrorStream(true).start()
-        val lines = process.inputStream.bufferedReader().readLines()
-        process.waitFor(3, TimeUnit.SECONDS)
-        lines.filter { line ->
+        val process = ProcessBuilder("logcat", "-d", "-v", "threadtime", "-t", "1500").redirectErrorStream(true).start()
+        val lines = java.util.Collections.synchronizedList(ArrayList<String>())
+        val reader = thread(isDaemon = true) {
+            runCatching { process.inputStream.bufferedReader().forEachLine { lines += it } }
+        }
+        reader.join(4_000)
+        process.destroy()
+        synchronized(lines) { lines.toList() }.filter { line ->
             val level = line.split(Regex("\\s+")).getOrNull(4)
             level == "E" || level == "F" || "AndroidRuntime" in line || " libc " in line || "DEBUG" in line
         }.takeLast(120).joinToString("\n")
