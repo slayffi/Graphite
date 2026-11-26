@@ -2,179 +2,226 @@
 
 <h1 align="center">Graphite</h1>
 
-<p align="center">Быстрый торрент-клиент для Windows и Android с общим кодом на Kotlin Multiplatform и Compose Multiplatform.<br>
-Нулевая отдача по умолчанию, без рекламы, аналитики и сбора данных.</p>
+<p align="center">A fast torrent client for Windows and Android, built from one codebase with Kotlin Multiplatform and Compose Multiplatform.<br>
+Zero upload by default. No ads, no analytics, no data collection.</p>
 
-<p align="center"><img src="docs/images/details.png" width="880" alt="Список загрузок и подробности"></p>
+<p align="center">
+  <a href="https://github.com/slayffi/Graphite/releases/latest"><img src="https://img.shields.io/github/v/release/slayffi/Graphite?label=release&color=c8c8cc&labelColor=141416" alt="Latest release"></a>
+  <a href="https://github.com/slayffi/Graphite/actions/workflows/build.yml"><img src="https://github.com/slayffi/Graphite/actions/workflows/build.yml/badge.svg" alt="Build"></a>
+  <img src="https://img.shields.io/badge/platforms-Windows%2010%2F11%20%C2%B7%20Android%208%2B-c8c8cc?labelColor=141416" alt="Windows 10/11, Android 8+">
+</p>
 
-<p align="center"><b><a href="../../releases/latest">Скачать последнюю версию</a></b> — APK для Android 8.0+ и установщик для Windows 10 / 11</p>
+<p align="center"><b>English</b> · <a href="README.ru.md">Русский</a></p>
 
-## Возможности
+<p align="center"><img src="docs/images/en/details.png" width="880" alt="Download list and details"></p>
 
-**Добавление.** `.torrent` (диалог, перетаскивание, ассоциация файлов), magnet (ссылка, буфер обмена, протокол `magnet:`), QR-код (Android), «Поделиться» (Android), наблюдаемая папка, RSS. Перед загрузкой — предпросмотр: дерево файлов с выбором и приоритетами, папка, проверка свободного места.
+<p align="center"><b><a href="https://github.com/slayffi/Graphite/releases/latest">Download the latest version</a></b><br>
+APK for Android 8.0+ · installer for Windows 10 / 11 (64-bit)</p>
 
-**Управление.** Пауза / продолжение / удаление (с файлами или без), очередь с перетаскиванием, повторная проверка хэша, данные возобновления, перемещение после завершения, категории и теги, поиск, фильтры, сортировка, массовые действия.
+## Features
 
-**Скорость.** DHT, PEX, LSD, uTP + TCP, UPnP / NAT-PMP, веб-сиды, IPv6, автоматический выбор порта и проверка доступности, автообновляемый список публичных трекеров, предвыделение места, асинхронный диск. Профили «Турбо» (по умолчанию), «Баланс», «Экономия». Лимита скачивания по умолчанию нет.
+**Adding.** `.torrent` files (dialog, drag and drop, file association), magnet links (paste, clipboard, the `magnet:` protocol), QR codes and Share (Android), a watched folder, RSS. Before a download starts you get a preview: the file tree with selection and priorities, the target folder and a free-space check.
 
-**Нулевая отдача** (включена по умолчанию, отключается в настройках) — см. [как это устроено](#нулевая-отдача).
+**Managing.** Pause, resume, delete (with or without files), a drag-and-drop queue, hash re-check, resume data, move on completion, categories and tags, search, filters, sorting, bulk actions.
 
-**Дополнительно.** Стриминг с последовательной загрузкой и встроенным плеером (libVLC на Windows, Media3 на Android); управление ПК с телефона в локальной сети (пара по QR, AES-256-GCM); планировщик; RSS с фильтрами; шифрование протокола, SOCKS5/HTTP-прокси, привязка к интерфейсу VPN с kill switch, IP-фильтр; действия после завершения (уведомление, звук, сон, выключение, выход); график скорости и статистика за день / неделю / месяц; журнал событий с понятными ошибками и советами; экспорт и импорт настроек и загрузок.
+**Speed.** DHT, PEX, LSD, uTP + TCP, UPnP / NAT-PMP, web seeds, IPv6, automatic port selection with a reachability check, an auto-updated list of public trackers, preallocation, asynchronous disk I/O. Three profiles: Turbo (default), Balanced, Economy. No download limit by default.
 
-**Android:** foreground-сервис с прогрессом и кнопками, только Wi-Fi / только при зарядке / пауза при низком заряде, виджет, плитка быстрых настроек, Storage Access Framework.
-**Windows:** установщик (`.exe` и `.msi`), трей, автозапуск, ассоциации `.torrent` и `magnet:`, мини-окно поверх всех, глобальные горячие клавиши, прогресс на панели задач, тёмный заголовок окна.
+**Zero upload** is on by default and can be switched off in the settings — see [how it works](#zero-upload).
+
+**More.**
+- Streaming with sequential download and a built-in player (libVLC on Windows, Media3 on Android).
+- Control your PC from your phone on the local network: pair with a QR code, traffic is encrypted with AES-256-GCM.
+- Scheduler, RSS with filters, actions on completion (notification, sound, sleep, shut down, exit).
+- Protocol encryption, SOCKS5 / HTTP proxy, binding to a VPN interface with a kill switch, IP filter.
+- Speed graph and statistics by day, week and month; an event log with readable errors and advice.
+- Export and import of settings and downloads.
+
+**Android:** foreground service with progress and actions, Wi-Fi only / charging only / pause on low battery, home-screen widget, Quick Settings tile, any folder through the Storage Access Framework.
+
+**Windows:** `.exe` and `.msi` installers, tray icon, autostart, `.torrent` and `magnet:` associations, always-on-top mini window, global hotkeys, taskbar progress, dark title bar.
 
 | | | |
 |---|---|---|
-| <img src="docs/images/downloads.png" alt="Загрузки"> | <img src="docs/images/add-preview.png" alt="Предпросмотр"> | <img src="docs/images/statistics.png" alt="Статистика"> |
-| <img src="docs/images/settings.png" alt="Настройки"> | <img src="docs/images/remote.png" alt="Удалённое управление"> | <img src="docs/images/components.png" alt="Компоненты"> |
+| <img src="docs/images/en/downloads.png" alt="Downloads"> | <img src="docs/images/en/add-preview.png" alt="Preview before adding"> | <img src="docs/images/en/statistics.png" alt="Statistics"> |
 
-## Сборка
+<p align="center">
+  <img src="docs/images/en/phone-downloads.png" width="250" alt="Downloads on Android">
+  &nbsp;
+  <img src="docs/images/en/phone-details.png" width="250" alt="Details on Android">
+  &nbsp;
+  <img src="docs/images/en/phone-add-preview.png" width="250" alt="Adding a download on Android">
+</p>
 
-### Что нужно
+## Install
 
-| | Версия |
+**Android 8.0 or newer.** Take `android-arm64-v8a` — it fits almost every phone. `armeabi-v7a` is for old 32-bit devices, `x86_64` for emulators and Chromebooks, `universal` works everywhere but is larger. Android will ask you to allow installation from this source.
+
+**Windows 10 / 11 (64-bit).** Run the `.exe`. It installs for the current user and does not need administrator rights; the player (libVLC) is included. The installer is not signed with a publisher certificate, so SmartScreen may warn you: *More info* → *Run anyway*. The `.msi` is the same installer in another format, handy for silent deployment (`msiexec /i … /qn`).
+
+Every release comes with `SHA256SUMS.txt` and the fingerprint of the certificate the APKs are signed with.
+
+## Status
+
+Version 1.0.0 is the first release. Every commit is checked by automated tests, and CI starts the release APK on an Android 14 emulator and installs and starts the Windows package on a clean Windows runner. Testing on real devices is still limited — see the [manual checklist](docs/MANUAL_TESTING.md) (in Russian). Known limitations:
+
+- The 1.0.0 APKs are signed with a temporary key, so the next version cannot be installed over them: uninstall first.
+- macOS and Linux are not shipped. The code builds there but has not been tested.
+- The phone and the PC must run the same version for remote control to connect.
+- On a sleeping phone a scheduler rule may fire up to 15 minutes late; that is the price of not keeping the device awake.
+
+## Responsible use
+
+Graphite is a client for the BitTorrent protocol and nothing else: it has no built-in search and no catalogue. What you download with it is your responsibility — use it for content you have the right to download. Your IP address is visible to the other peers of a torrent, as with any BitTorrent client.
+
+## Zero upload
+
+When enabled (the default):
+
+1. `unchoke_slots_limit = 0` — no peer is ever allowed to download from us. With zero slots libtorrent does not perform optimistic unchokes either.
+2. `allowed_fast_set_size = 0` — no "allowed fast" pieces, which could otherwise be fetched without an unchoke.
+3. A peer-class filter puts **all** IPv4 and IPv6 addresses, the local network included, into the global class. Otherwise local peers land in a class the slot limit does not apply to.
+4. `upload_rate_limit` is deliberately **not** set to a minimum: in libtorrent that limit throttles every outgoing byte, our piece requests included, and would slow the download down. With zero slots it is not needed.
+5. `active_seeds = 0`, `seeding_outgoing_connections = false`; at 100 % the torrent is taken out of auto-management and paused, so seeding never starts.
+6. The interface shows **payload uploaded** (`total_payload_upload`), which stays at 0. Protocol overhead (handshakes, requests, `have` messages) is not zero and cannot be; it is not upload of data.
+
+This is verified by `EngineIntegrationTest` with three real libtorrent sessions on localhost — a seeder, Graphite and an unrelated leecher. Graphite downloads the whole file, the leecher does not receive a single byte of data from it, and nothing is seeded after completion.
+
+Private trackers that require a ratio need zero upload switched off.
+
+## Privacy
+
+- No ads, analytics, telemetry, crash reporting or accounts.
+- The network is used only for BitTorrent, for updating the tracker list (by default [ngosang/trackerslist](https://github.com/ngosang/trackerslist); the address can be changed or removed), for RSS feeds you add yourself, and for remote control inside the local network.
+- The remote-control key travels only inside the QR code and is never part of a settings export. Requests are encrypted with AES-256-GCM and protected against replay. The server answers local-network addresses only, and the phone may only save or move downloads into folders the PC already uses.
+- Everything that comes from outside (`.torrent` files, RSS, tracker lists, answers from the PC, files in the watched folder) is read with size and time limits. Links from an RSS feed cannot point into the local network unless the feed itself lives there.
+- A settings export contains neither the proxy password nor the remote-control key. An import does not change remote-control settings or the IP filter, and restored downloads whose folder lies outside the default one are added paused.
+- Android backup of the app is disabled (`allowBackup=false`).
+
+## Building
+
+### Requirements
+
+| | Version |
 |---|---|
-| JDK | 21 (Temurin или любой другой) |
-| Android SDK | platform 37 и build-tools Gradle (AGP) докачивает сам, если лицензии SDK приняты |
-| Windows (только для установщиков) | Windows 10/11 x64; WiX Toolset Compose Multiplatform скачивает сам |
-| Gradle | через `./gradlew` (9.9.2) |
+| JDK | 21 (Temurin or any other) |
+| Android SDK | platform 37; Gradle (AGP) downloads it and the build tools once the SDK licences are accepted |
+| Windows (installers only) | Windows 10/11 x64; Compose Multiplatform downloads the WiX Toolset itself |
+| Gradle | through `./gradlew` (9.9.2) |
 
-Все версии библиотек — в [`gradle/libs.versions.toml`](gradle/libs.versions.toml).
+All library versions are in [`gradle/libs.versions.toml`](gradle/libs.versions.toml).
 
-### Команды
+### Commands
 
 ```bash
-# Тесты (core, data, UI, desktop)
+# Tests (core, data, UI, desktop)
 ./gradlew :core:desktopTest :data:desktopTest :ui:designsystem:desktopTest :ui:app:desktopTest :platform:desktop:test
 
-# Android: отладочные и релизные APK (по ABI + universal)
+# Android: debug and release APKs (one per ABI plus universal)
 ./gradlew :platform:android:assembleDebug
 ./gradlew :platform:android:assembleRelease
 #   → platform/android/build/outputs/apk/{debug,release}/
 
-# Запуск desktop-версии из исходников (Windows, Linux; macOS не проверялся)
+# Run the desktop app from source (Windows, Linux; macOS untested)
 ./gradlew :platform:desktop:run
 
-# Установщики (только на Windows): .exe и .msi с одним и тем же содержимым
+# Installers (on Windows only): .exe and .msi with the same content
 ./gradlew :platform:desktop:packageExe :platform:desktop:packageMsi
 #   → platform/desktop/build/compose/binaries/main/exe/Graphite-1.0.0.exe
 #   → platform/desktop/build/compose/binaries/main/msi/Graphite-1.0.0.msi
 ```
 
-**Подпись релизного APK.** Задайте переменные окружения `GRAPHITE_KEYSTORE_FILE`, `GRAPHITE_KEYSTORE_PASSWORD`, `GRAPHITE_KEY_ALIAS`, `GRAPHITE_KEY_PASSWORD`. Без них релизный APK подписывается отладочным ключом (годится для проверки, не для публикации).
+**Signing the release APK.** Set `GRAPHITE_KEYSTORE_FILE`, `GRAPHITE_KEYSTORE_PASSWORD`, `GRAPHITE_KEY_ALIAS` and `GRAPHITE_KEY_PASSWORD`. Without them the release APK is signed with the debug key, which is fine for testing but not for publishing.
 
-**libVLC в установщике.** Встроенный плеер ищет libVLC сначала внутри установленного приложения, затем в установленном VLC. Чтобы положить его в установщик, перед сборкой распакуйте [VLC 3.0.x win64 zip](https://download.videolan.org/pub/videolan/vlc/) и скопируйте `libvlc.dll`, `libvlccore.dll`, `COPYING.txt` и папку `plugins` в `platform/desktop/resources/windows/vlc/` (папка в `.gitignore`). CI делает это сам. Без libVLC приложение работает, плеер предлагает открыть поток во внешнем приложении.
+**libVLC in the installer.** The built-in player looks for libVLC inside the installed app first, then in an installed VLC. To bundle it, unpack the [VLC 3.0.x win64 zip](https://download.videolan.org/pub/videolan/vlc/) before packaging and copy `libvlc.dll`, `libvlccore.dll`, `COPYING.txt` and the `plugins` folder into `platform/desktop/resources/windows/vlc/` (git-ignored). CI does this by itself. Without libVLC the app still works and offers to open the stream in another player.
 
-**Linux.** libtorrent4j подменяет обработчик SIGSEGV, поэтому JVM на Linux запускается с `LD_PRELOAD=$JAVA_HOME/lib/libjsig.so` — Gradle-задачи `run` и `test` делают это автоматически. На Windows (целевая платформа) это не нужно.
+**Linux.** libtorrent4j replaces the SIGSEGV handler, so on Linux the JVM is started with `LD_PRELOAD=$JAVA_HOME/lib/libjsig.so`; the Gradle `run` and `test` tasks do that automatically. Windows, the shipped platform, does not need it.
 
-**Проверка запуска на Windows.** `Graphite.exe --self-test отчёт.txt` — обычный запуск во временной папке данных (ваши загрузки и настройки не затрагиваются): приложение открывает окно, рисует интерфейс, запускает движок, ищет libVLC, пишет отчёт и выходит с кодом 0 или 1. CI ставит собранный `.exe` на чистую Windows и запускает эту проверку: пакет может быть сломан так, как не покажет ни один тест кода (в упакованной Java не хватает модуля, не грузится нативная библиотека).
+**Start-up check on Windows.** `Graphite.exe --self-test report.txt` is an ordinary start in a throw-away data folder (your downloads and settings are not touched): the app opens its window, draws the interface, starts the engine, looks for libVLC, writes a report and exits with code 0 or 1. CI installs the freshly built `.exe` on a clean Windows runner and runs this check, because a package can be broken in ways no test of the code will show — a Java module missing from the bundled runtime, a native library that does not load.
 
-**Проверка запуска на Android.** `tools/android_smoke_test.sh <apk>` ставит APK на подключённый эмулятор или телефон, запускает Graphite и проверяет, что процесс жив, первый экран показан и в журнале нет падений. Запускайте её на **релизном** APK: ошибки R8 и падения в инициализаторах библиотек не видны в JVM-тестах (так однажды уже было: старый WorkManager, который тянет Glance, падал в релизе до старта приложения).
+**Start-up check on Android.** `tools/android_smoke_test.sh <apk>` installs an APK on the connected emulator or phone, starts Graphite, adds a magnet link and checks that the process is alive, the first screen is shown, the foreground service runs and the log has no crashes. Run it on the **release** APK: R8 problems and crashes in library initializers are invisible to JVM tests.
 
-### Выпуск релиза
+### Releasing
 
-1. Поставьте одну и ту же версию в `platform/android/build.gradle.kts` (`versionName`, и увеличьте `versionCode`) и в `platform/desktop/build.gradle.kts` (`appVersion`).
-2. Напишите описание в `docs/releases/v<версия>.md`.
-3. Отправьте тег `v<версия>` — или запустите workflow **Build** вручную с `release: publish` (`draft` создаёт черновик, который видят только участники репозитория; его публикует workflow **Publish draft release**).
+1. Set the same version in `platform/android/build.gradle.kts` (`versionName`, and raise `versionCode`) and in `platform/desktop/build.gradle.kts` (`appVersion`).
+2. Write the notes in `docs/releases/v<version>.md`.
+3. Push the tag `v<version>` — or run the **Build** workflow by hand with `release: publish`. `draft` creates a draft only repository members can see; the **Publish draft release** workflow makes it public.
 
-CI прогоняет тесты, собирает APK и установщики Windows, запускает релизный APK на эмуляторе, ставит `.exe` на чистую Windows и запускает установленное приложение, и только потом создаёт релиз: файлы, `SHA256SUMS.txt` и отпечаток сертификата подписи. Опубликованный релиз не перезаписывается — для нового поднимите версию. Режим `release: add-files` только добавляет в опубликованный релиз этой версии файлы, которых в нём ещё нет (так в 1.0.0 появился `.exe`).
+CI runs the tests, builds the APKs and the Windows installers, starts the release APK on an emulator, installs the `.exe` on a clean Windows runner and starts the installed app, and only then creates the release: the files, `SHA256SUMS.txt` and the fingerprint of the signing certificate. A published release is never overwritten — raise the version for a new one. `release: add-files` only uploads files a published release of the same version does not have yet, and `release: notes` refreshes its text.
 
-**Ключ подписи Android.** Android ставит обновление поверх, только если оно подписано тем же ключом. Поэтому ключ нужен один на всё время жизни приложения, и хранить его надо в секретах репозитория (Settings → Secrets and variables → Actions):
+**Android signing key.** Android installs an update over an existing app only if it is signed with the same key. The app therefore needs one key for its whole life, kept in the repository secrets (Settings → Secrets and variables → Actions):
 
-| Секрет | Значение |
+| Secret | Value |
 |---|---|
-| `GRAPHITE_KEYSTORE_BASE64` | файл ключа в base64 (`base64 -w0 graphite.keystore`) |
-| `GRAPHITE_KEYSTORE_PASSWORD` | пароль хранилища |
-| `GRAPHITE_KEY_ALIAS` | имя ключа |
-| `GRAPHITE_KEY_PASSWORD` | пароль ключа |
+| `GRAPHITE_KEYSTORE_BASE64` | the keystore file in base64 (`base64 -w0 graphite.keystore`) |
+| `GRAPHITE_KEYSTORE_PASSWORD` | keystore password |
+| `GRAPHITE_KEY_ALIAS` | key alias |
+| `GRAPHITE_KEY_PASSWORD` | key password |
 
-Создать ключ: `keytool -genkeypair -keystore graphite.keystore -alias graphite -keyalg RSA -keysize 4096 -validity 10950`. Сохраните файл и пароли отдельно от репозитория: без них обновления выпускать будет нельзя. Без секретов CI подписывает APK одноразовым ключом раннера, и релиз создаётся только с явным `temporary_key`.
+Create a key with `keytool -genkeypair -keystore graphite.keystore -alias graphite -keyalg RSA -keysize 4096 -validity 10950`. Keep the file and the passwords somewhere outside the repository: without them no update can be published. Without the secrets CI signs the APKs with the runner's throw-away key, and a release is only created when `temporary_key` is set explicitly.
 
 ### CI
 
-[`.github/workflows/build.yml`](.github/workflows/build.yml) на каждый коммит: тесты на Ubuntu, APK на Ubuntu, запуск релизного APK на эмуляторе Android 14 (если приложение не стартует, задача падает; на раннерах без аппаратного ускорения проверка пропускается с предупреждением), установщики `.exe` и `.msi` на Windows (с libVLC), установка `.exe` и запуск установленного приложения с самопроверкой. Артефакты: `graphite-android`, `graphite-windows`, `test-reports`. Для подписанного релиза добавьте секреты `GRAPHITE_KEYSTORE_BASE64`, `GRAPHITE_KEYSTORE_PASSWORD`, `GRAPHITE_KEY_ALIAS`, `GRAPHITE_KEY_PASSWORD`.
+[`.github/workflows/build.yml`](.github/workflows/build.yml) runs on every commit: tests on Ubuntu, the APKs on Ubuntu, the release APK started on an Android 14 emulator (the job fails if the app does not start; on runners without hardware acceleration the check is skipped with a warning), the `.exe` and `.msi` installers on Windows with libVLC, and the `.exe` installed and started with the self-test. Artifacts: `graphite-android`, `graphite-windows`, `test-reports`.
 
-## Архитектура
+## Architecture
 
 ```
-core                 модели, движок (libtorrent4j), настройки libtorrent, magnet, RSS, планировщик, ошибки
- └─ data             SQLDelight (загрузки, история, статистика, журнал, RSS, расписание), DataStore (настройки),
-     │               LocalTorrentController, автоматизация, стриминг, удалённое управление, бэкап
-     └─ ui:app       экраны и ViewModel (MVVM, StateFlow), навигация, ресурсы ru/en
-         └─ ui:designsystem   GraphiteTheme (токены), компоненты, иконки, шрифты
-platform:android     Activity, foreground-сервис, SAF, ExoPlayer, виджет, плитка, сканер QR
-platform:desktop     окно, трей, MSI, реестр Windows (автозапуск, ассоциации), горячие клавиши, libVLC
-testing              фейковый движок для тестов data и UI (в приложения не попадает)
+core                 models, engine (libtorrent4j), libtorrent settings, magnet links, RSS, scheduler, errors
+ └─ data             SQLDelight (downloads, history, statistics, log, RSS, schedule), DataStore (settings),
+     │               LocalTorrentController, automation, streaming, remote control, backup
+     └─ ui:app       screens and view models (MVVM, StateFlow), navigation, ru/en resources
+         └─ ui:designsystem   GraphiteTheme (tokens), components, icons, fonts
+platform:android     activity, foreground service, SAF, ExoPlayer, widget, tile, QR scanner
+platform:desktop     window, tray, installers, Windows registry (autostart, associations), hotkeys, libVLC
+testing              fake engine for data and UI tests (not part of the apps)
 ```
 
-- **Один контроллер на всё.** UI работает только с интерфейсом `TorrentController`. На ПК это `LocalTorrentController` поверх libtorrent; на телефоне `SwitchableTorrentController` переключает весь интерфейс между локальным движком и сопряжённым ПК (`RemoteTorrentController`), экраны об этом не знают.
-- **Потоки данных.** Движок публикует состояние раз в секунду (`StateFlow`), события — через `SharedFlow`; контроллер объединяет живые загрузки с архивными (завершёнными и перенесёнными в SAF), пишет историю, статистику и журнал.
-- **Тема.** Все цвета, размеры, радиусы, отступы и длительности анимаций — в `GraphiteTheme` (`ui/designsystem/.../theme`). Каждый компонент — отдельная функция с `@Preview`.
+- **One controller for everything.** The UI only talks to the `TorrentController` interface. On the PC that is `LocalTorrentController` on top of libtorrent. On the phone `SwitchableTorrentController` switches the whole interface between the local engine and the paired PC (`RemoteTorrentController`); the screens do not know the difference.
+- **Data flow.** The engine publishes state as a `StateFlow` and events as a `SharedFlow`. The controller merges live downloads with archived ones (completed and moved to a SAF folder) and writes history, statistics and the log.
+- **Theme.** Every colour, size, radius, spacing and animation duration lives in `GraphiteTheme` (`ui/designsystem/.../theme`). Each component is a separate function with a `@Preview`.
 
-### Нулевая отдача
+### Speed and disk
 
-Когда включено (по умолчанию):
-
-1. `unchoke_slots_limit = 0` — ни один пир не получает разрешения скачивать у нас. При нуле слотов libtorrent не делает и optimistic unchoke.
-2. `allowed_fast_set_size = 0` — не раздаём «allowed fast»-куски, которые можно скачать без unchoke.
-3. Фильтр классов пиров переводит **все** адреса IPv4/IPv6 (включая локальную сеть) в глобальный класс: иначе локальные пиры попадают в класс, на который лимит слотов не действует.
-4. `upload_rate_limit` **не** ставится в минимальное значение: в libtorrent этот лимит режет все исходящие байты, включая наши запросы кусков, и замедлил бы скачивание. При нуле слотов он и не нужен.
-5. `active_seeds = 0`, `seeding_outgoing_connections = false`; на 100 % загрузка снимается с авто-управления и ставится на паузу — раздачи не бывает.
-6. В интерфейсе показывается **отданный полезный трафик** (`total_payload_upload`) — он равен 0. Служебный трафик протокола (рукопожатия, запросы, `have`) не равен нулю и не может быть, он к «отдаче» не относится.
-
-Это проверено интеграционным тестом `EngineIntegrationTest`: три настоящие сессии libtorrent на localhost — сидер, Graphite и посторонний личер. Graphite скачивает файл полностью, личер не получает от него ни одного байта данных, после 100 % раздача не начинается.
-
-Для приватных трекеров с обязательным рейтингом нулевую отдачу нужно выключить.
-
-### Скорость и диск
-
-| Параметр libtorrent | Турбо | Баланс | Экономия |
+| libtorrent setting | Turbo | Balanced | Economy |
 |---|---|---|---|
 | `connections_limit` | 800 | 400 | 120 |
 | `max_out_request_queue` | 1500 | 600 | 250 |
 | `connection_speed` | 200 | 60 | 15 |
 | `torrent_connect_boost` | 100 | 40 | 10 |
-| буферы сокетов | 1 МБ | 512 КБ | системные |
-| `max_queued_disk_bytes` | 64 МБ | 32 МБ | 8 МБ |
-| `aio_threads` | 2 × ядер (4…32) | ядер (2…16) | 2 |
-| `hashing_threads` | ядер (2…16) | ядер / 2 (1…8) | 1 |
-| активных загрузок | 8 | 5 | 3 |
+| socket buffers | 1 MB | 512 KB | system default |
+| `max_queued_disk_bytes` | 64 MB | 32 MB | 8 MB |
+| `aio_threads` | 2 × cores (4…32) | cores (2…16) | 2 |
+| `hashing_threads` | cores (2…16) | cores / 2 (1…8) | 1 |
+| active downloads | 8 | 5 | 3 |
 
-Лимиты соединений и загрузок, размер дисковой очереди можно переопределить в настройках. **Про кэш:** в libtorrent 2.x собственного дискового кэша больше нет — данные идут через страничный кэш ОС (mmap). Поэтому «кэш» в настройках — это размер очереди записи (`max_queued_disk_bytes`) и выбор бэкенда (mmap или pread/pwrite) и режима записи.
+Connection and download limits and the disk queue size can be overridden in the settings. **About the cache:** libtorrent 2.x no longer has a disk cache of its own — data goes through the operating system's page cache (mmap). The "cache" in the settings is therefore the size of the write queue (`max_queued_disk_bytes`) plus the choice of backend (mmap or pread/pwrite) and write mode.
 
-### Экономия заряда и работа в фоне (Android)
+Turbo takes the whole connection and opens many peers at once. If the rest of your network slows down while a torrent runs, set a download limit at about 80 % of your line speed or switch to Balanced.
 
-- Состояние загрузок движок сообщает сам и только об изменившихся торрентах (`post_torrent_updates` → `state_update_alert`) — простаивающие торренты не опрашиваются; файлы возобновления пишутся, только если что-то изменилось.
-- Фоновая служба работает, пока есть что делать: идёт загрузка, проверка, перенос файлов, либо загрузки ждут условия (Wi-Fi, зарядка, расписание). Пауза, поставленная вручную, службу останавливает.
-- Процессор и Wi-Fi удерживаются от сна только пока идут данные. Если 10 минут не получено ни байта (нет сидов) или загрузки ждут условия, телефону разрешается уснуть; раз в ~15 минут он просыпается на 45 секунд, чтобы проверить расписание и поискать пиры заново. Следствие: правило расписания во сне может сработать с опозданием до 15 минут.
-- Уведомление обновляется только при изменении содержимого: раз в 2 с при включённом экране и раз в 10 с при выключенном. Виджет — не чаще раза в 10 с.
-- Экран «Подробности» опрашивает движок только пока он открыт и виден; список загрузок не пересчитывается, когда приложение свёрнуто.
+### Battery and background work (Android)
 
-## Приватность
+- The engine reports state by itself and only for torrents that changed (`post_torrent_updates` → `state_update_alert`); idle torrents are not polled, and resume files are written only when something changed.
+- The background service runs while there is something to do: a download, a check, a file move, or downloads waiting for a condition (Wi-Fi, charger, schedule). A manual pause stops the service.
+- The CPU and Wi-Fi are kept awake only while data flows. After 10 minutes without a byte (no seeds), or while downloads wait for a condition, the phone is allowed to sleep; about every 15 minutes it wakes for 45 seconds to check the schedule and look for peers again.
+- The notification is updated only when its content changes: every 2 s with the screen on, every 10 s with it off. The widget updates at most every 10 s.
+- The details screen polls the engine only while it is open and visible, and the download list is not recomputed while the app is in the background.
 
-- Нет рекламы, аналитики, телеметрии, отчётов о сбоях, учётных записей.
-- Сеть используется только для BitTorrent, обновления списка трекеров (по умолчанию [ngosang/trackerslist](https://github.com/ngosang/trackerslist), адрес можно сменить или убрать), RSS-лент, которые добавили вы, и удалённого управления в локальной сети.
-- Ключ удалённого управления передаётся только через QR-код, не попадает в экспорт настроек; запросы шифруются AES-256-GCM, есть защита от повтора. Сервер отвечает только адресам локальной сети; с телефона можно сохранять и переносить загрузки только в папки, которые уже используются на ПК. Версии на телефоне и ПК должны быть одинаковыми (формат запросов менялся).
-- Всё, что приходит извне (`.torrent`, RSS, списки трекеров, ответы ПК, файлы из наблюдаемой папки), читается с ограничением размера и времени. Ссылки из RSS не могут обращаться к адресам локальной сети, если сама лента не локальная.
-- Экспорт настроек не содержит пароля прокси и ключа удалённого управления. Импорт не меняет настройки удалённого управления и IP-фильтр; загрузки из резервной копии с папкой вне папки по умолчанию добавляются на паузе.
-- На Android отключено резервное копирование приложения (`allowBackup=false`).
+## Tests
 
-## Тесты
-
-| Набор | Что проверяет |
+| Suite | What it covers |
 |---|---|
-| `core` | настройки libtorrent по профилям, magnet, IP-фильтр, список трекеров, ошибки, расписание, RSS; интеграция с настоящим libtorrent (нулевая отдача, без раздачи, возобновление, приоритеты) |
-| `data` | репозитории, настройки, контроллер (порт, добавление, завершение, архив SAF, недоступная папка, нехватка места), автоматизация, стриминг байт-в-байт по Range, зашифрованный обмен телефон ↔ ПК |
-| `ui:app` | сценарии в настоящем `GraphiteApp`: первое добавление magnet с предпросмотром, битая ссылка, нехватка места, фильтры и пауза, удаление с подтверждением, поиск в настройках и нулевая отдача; рендер экранов на русском (скриншоты README) |
-| `ui:designsystem` | форматирование размеров, скоростей и времени; галерея компонентов |
-| `platform:desktop` | декодирование видео через libVLC (пропускается, если libVLC или ffmpeg не установлены) |
-| `tools/android_smoke_test.sh` | релизный APK на эмуляторе: приложение стартует, показывает экран загрузок и не падает |
+| `core` | libtorrent settings per profile, magnet links, IP filter, tracker list, errors, schedule, RSS; integration with real libtorrent (zero upload, no seeding, resume, priorities) |
+| `data` | repositories, settings, the controller (port, adding, completion, SAF archive, unavailable folder, not enough space), automation, byte-exact streaming with Range requests, the encrypted phone ↔ PC exchange |
+| `ui:app` | scenarios in the real `GraphiteApp`: first magnet with preview, broken link, not enough space, filters and pause, delete with confirmation, settings search and zero upload; the screens rendered in Russian and English (the README screenshots) |
+| `ui:designsystem` | formatting of sizes, speeds and durations; the component gallery |
+| `platform:desktop` | video decoding through libVLC (skipped when libVLC or ffmpeg is not installed) |
+| `tools/android_smoke_test.sh` | the release APK on an emulator: the app starts, shows the download list, accepts a magnet link and does not crash |
+| `Graphite.exe --self-test` | the installed Windows package: window, interface, engine and player come up |
 
-Ручная проверка — [`docs/MANUAL_TESTING.md`](docs/MANUAL_TESTING.md).
+## Third-party components
 
-## Сторонние компоненты
+[libtorrent](https://libtorrent.org) (BSD-3-Clause) through [libtorrent4j](https://github.com/aldenml/libtorrent4j) (MIT), Kotlin and kotlinx (Apache-2.0), Compose Multiplatform and AndroidX including Media3 and Glance (Apache-2.0), SQLDelight (Apache-2.0), Okio (Apache-2.0), ZXing (Apache-2.0), JNA (Apache-2.0 / LGPL-2.1), the Inter and JetBrains Mono fonts (OFL-1.1), Lucide icons (ISC), and libVLC (LGPL-2.1+) in the Windows installers. Some VLC plugins are distributed under GPL-2.0+. Licence texts are in [`licenses/`](licenses) and [`THIRD-PARTY-NOTICES.txt`](THIRD-PARTY-NOTICES.txt).
 
-[libtorrent](https://libtorrent.org) (BSD-3-Clause) через [libtorrent4j](https://github.com/aldenml/libtorrent4j) (MIT), Kotlin и kotlinx (Apache-2.0), Compose Multiplatform и AndroidX, включая Media3 и Glance (Apache-2.0), SQLDelight (Apache-2.0), Okio (Apache-2.0), ZXing (Apache-2.0), JNA (Apache-2.0 / LGPL-2.1), шрифты Inter и JetBrains Mono (OFL-1.1), иконки Lucide (ISC), libVLC (LGPL-2.1+, в MSI; часть плагинов VLC распространяется под GPL-2.0+ — проверьте это, если будете распространять Graphite под несовместимой лицензией, или уберите такие плагины). Тексты лицензий — в [`licenses/`](licenses) и [`THIRD-PARTY-NOTICES.txt`](THIRD-PARTY-NOTICES.txt).
+## Licence
 
-Лицензия самого Graphite не выбрана — это решение владельца репозитория.
+No licence has been chosen for Graphite itself yet. Until one is added, the source is published for reading and all rights are reserved by the author.

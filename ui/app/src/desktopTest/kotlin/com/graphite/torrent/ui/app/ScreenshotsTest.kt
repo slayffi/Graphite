@@ -34,19 +34,30 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 
 /**
- * Renders the main screens in Russian with demo data and saves them to build/screenshots
- * (the README images come from here). Also checks that the Russian strings are in place.
+ * Renders the main screens with demo data in Russian (build/screenshots) and in English (build/screenshots/en);
+ * the README images come from here. Also checks that the strings of both languages are in place.
  */
 @OptIn(ExperimentalTestApi::class)
 class ScreenshotsTest {
     private lateinit var harness: TestHarness
     private val defaultLocale = Locale.getDefault()
-    private val out = File("build/screenshots").apply { mkdirs() }
+    private var out = File("build/screenshots")
+
+    /** The words the test looks for, per language. */
+    private class Words(
+        val locale: String, val folder: String?, val downloads: String, val files: String, val statistics: String,
+        val settings: String, val zeroUpload: String, val addDownload: String, val next: String,
+        val whatToDownload: String, val back: String, val week: String, val movies: String,
+    )
 
     @BeforeTest
     fun setUp() {
-        Locale.setDefault(Locale.forLanguageTag("ru-RU"))
         harness = TestHarness()
+    }
+
+    private fun use(words: Words) {
+        Locale.setDefault(Locale.forLanguageTag(words.locale))
+        out = (words.folder?.let { File("build/screenshots", it) } ?: File("build/screenshots")).apply { mkdirs() }
     }
 
     @AfterTest
@@ -74,43 +85,55 @@ class ScreenshotsTest {
     }
 
     @Test
-    fun mainScreens() = runDesktopComposeUiTest(1280, 800) {
-        seedDemoData()
+    fun mainScreens() = runDesktopComposeUiTest(1280, 800) { mainScreens(RU) }
+
+    @Test
+    fun mainScreensEnglish() = runDesktopComposeUiTest(1280, 800) { mainScreens(EN) }
+
+    private fun DesktopComposeUiTest.mainScreens(w: Words) {
+        use(w)
+        seedDemoData(w)
         harness.start()
         feedSpeedHistory()
         setContent { GraphiteApp(harness.env, showSplash = false) }
 
         waitFor(hasContentDescription("Sintel.2010.2160p.HDR"))
-        waitFor(hasText("Загрузки"))
+        waitFor(hasText(w.downloads))
         save("downloads")
 
         click(hasContentDescription("Sintel.2010.2160p.HDR") and hasClickAction())
-        waitFor(hasText("Файлы"))
+        waitFor(hasText(w.files))
         save("details")
 
-        click(hasContentDescription("Статистика") and hasClickAction())
-        waitFor(hasText("Статистика"))
+        click(hasContentDescription(w.statistics) and hasClickAction())
+        waitFor(hasText(w.statistics))
         save("statistics")
 
-        click(hasContentDescription("Настройки") and hasClickAction())
-        waitFor(hasText("Нулевая отдача"))
+        click(hasContentDescription(w.settings) and hasClickAction())
+        waitFor(hasText(w.zeroUpload))
         save("settings")
 
-        click(hasContentDescription("Загрузки") and hasClickAction())
-        click(hasContentDescription("Добавить загрузку") and hasClickAction())
+        click(hasContentDescription(w.downloads) and hasClickAction())
+        click(hasContentDescription(w.addDownload) and hasClickAction())
         waitFor(hasSetTextAction())
         onNode(hasSetTextAction()).performTextInput("magnet:?xt=urn:btih:08ada5a7a6183aae1e09d831df6748d566095a10&dn=Sintel")
-        click(hasText("Продолжить") and hasClickAction())
-        waitFor(hasText("Что скачать"))
+        click(hasText(w.next) and hasClickAction())
+        waitFor(hasText(w.whatToDownload))
         save("add-preview")
     }
 
     /** The phone layout (what Android shows), rendered at 2x for review: bottom bar, full-screen details, bottom sheets. */
     @Test
-    fun phoneScreens() = runDesktopComposeUiTest(824, 1830) {
+    fun phoneScreens() = runDesktopComposeUiTest(824, 1830) { phoneScreens(RU) }
+
+    @Test
+    fun phoneScreensEnglish() = runDesktopComposeUiTest(824, 1830) { phoneScreens(EN) }
+
+    private fun DesktopComposeUiTest.phoneScreens(w: Words) {
+        use(w)
         platformOverride = PlatformKind.ANDROID
         try {
-            seedDemoData()
+            seedDemoData(w)
             harness.start()
             feedSpeedHistory()
             setContent {
@@ -122,35 +145,35 @@ class ScreenshotsTest {
             save("phone-downloads")
 
             click(hasContentDescription("Sintel.2010.2160p.HDR") and hasClickAction())
-            waitFor(hasText("Файлы"))
+            waitFor(hasText(w.files))
             save("phone-details")
-            click(hasText("Файлы") and hasClickAction())
+            click(hasText(w.files) and hasClickAction())
             mainClock.advanceTimeBy(2_000)
             save("phone-details-files")
-            click(hasContentDescription("Назад") and hasClickAction())
+            click(hasContentDescription(w.back) and hasClickAction())
 
-            click(hasText("Статистика") and hasClickAction())
-            waitFor(hasText("Неделя"))
+            click(hasText(w.statistics) and hasClickAction())
+            waitFor(hasText(w.week))
             save("phone-statistics")
 
-            click(hasText("Настройки") and hasClickAction())
-            waitFor(hasText("Нулевая отдача"))
+            click(hasText(w.settings) and hasClickAction())
+            waitFor(hasText(w.zeroUpload))
             save("phone-settings")
 
-            click(hasText("Загрузки") and hasClickAction())
-            click(hasContentDescription("Добавить загрузку") and hasClickAction())
+            click(hasText(w.downloads) and hasClickAction())
+            click(hasContentDescription(w.addDownload) and hasClickAction())
             waitFor(hasSetTextAction())
             save("phone-add")
             onNode(hasSetTextAction()).performTextInput("magnet:?xt=urn:btih:08ada5a7a6183aae1e09d831df6748d566095a10&dn=Sintel")
-            click(hasText("Продолжить") and hasClickAction())
-            waitFor(hasText("Что скачать"))
+            click(hasText(w.next) and hasClickAction())
+            waitFor(hasText(w.whatToDownload))
             save("phone-add-preview")
         } finally {
             platformOverride = null
         }
     }
 
-    private fun seedDemoData() {
+    private fun seedDemoData(w: Words) {
         val e = harness.engine
         val path = DEMO_FOLDER
         val now = System.currentTimeMillis()
@@ -161,7 +184,7 @@ class ScreenshotsTest {
                 id('1') to e.item(id('1'), "Sintel.2010.2160p.HDR", path).copy(
                     progress = 0.62f, totalBytes = 8 * gb, wantedBytes = 8 * gb, doneBytes = (8 * gb * 0.62).toLong(),
                     downloadRate = 38_400_000, etaSeconds = 82, connectedPeers = 143, connectedSeeds = 96, totalPeers = 610,
-                    totalSeeds = 512, category = "Фильмы", sequential = true, addedAt = now - 25 * 60_000,
+                    totalSeeds = 512, category = w.movies, sequential = true, addedAt = now - 25 * 60_000,
                 ),
                 id('2') to e.item(id('2'), "ubuntu-24.04.1-desktop-amd64.iso", path).copy(
                     progress = 0.27f, totalBytes = 6 * gb, wantedBytes = 6 * gb, doneBytes = (6 * gb * 0.27).toLong(),
@@ -213,5 +236,7 @@ class ScreenshotsTest {
 
     private companion object {
         const val DEMO_FOLDER = "/home/user/Downloads/Graphite"
+        val RU = Words("ru-RU", null, "Загрузки", "Файлы", "Статистика", "Настройки", "Нулевая отдача", "Добавить загрузку", "Продолжить", "Что скачать", "Назад", "Неделя", "Фильмы")
+        val EN = Words("en-US", "en", "Downloads", "Files", "Statistics", "Settings", "Zero upload", "Add download", "Continue", "What to download", "Back", "Week", "Movies")
     }
 }

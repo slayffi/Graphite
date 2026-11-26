@@ -2,8 +2,9 @@
 # Creates the GitHub release for the version written in the build files. Runs in CI after the tests, the
 # builds and the Android start-up check: it only collects what they produced.
 #
-#   MODE=draft|publish|add-files  (a tag push always publishes; add-files uploads what a published release
-#                                 of this version does not have yet and replaces nothing)
+#   MODE=draft|publish|add-files|notes
+#       a tag push always publishes; add-files uploads what a published release of this version does not
+#       have yet and replaces nothing; notes only refreshes the text of a published release
 #   HAS_KEY=true|false            the APKs were signed with the release key from the repository secrets
 #   TEMPORARY_KEY_OK=true|false   allow a release signed with CI's throw-away debug key
 #   dist/android, dist/windows    the build artifacts
@@ -31,6 +32,61 @@ require_key() {
     fail "No signing key: add the secrets GRAPHITE_KEYSTORE_BASE64, GRAPHITE_KEYSTORE_PASSWORD, GRAPHITE_KEY_ALIAS and GRAPHITE_KEY_PASSWORD (see README), or run the workflow with 'temporary_key'."
   fi
 }
+
+# Prints the SHA-256 digest of the certificate the given APKs are signed with (nothing when it cannot be read).
+# Lets anyone check that an update comes from the same publisher.
+apk_fingerprint() {
+  local apksigner fingerprint="" report fp apk
+  apksigner=$(ls -d "${ANDROID_HOME:-/usr/local/lib/android/sdk}"/build-tools/*/ 2>/dev/null | sort -V | tail -1)apksigner
+  [ -x "$apksigner" ] || return 0
+  for apk in "$@"; do
+    # apksigner fails when the signature does not verify; its wording differs between versions, so only the
+    # digest itself is looked for.
+    report=$("$apksigner" verify --print-certs "$apk" 2>&1) || { echo "$report" >&2; fail "$apk: the signature does not verify"; }
+    fp=$(grep -oiE 'SHA-256 digest: *[0-9a-f]{64}' <<< "$report" | head -1 | grep -oiE '[0-9a-f]{64}' || true)
+    if [ -z "$fp" ]; then
+      { echo "::warning::Could not read the signing certificate of $apk; apksigner said:"; echo "$report"; } >&2
+      return 0
+    fi
+    [ -z "$fingerprint" ] || [ "$fingerprint" = "$fp" ] || fail "The APKs are signed with different keys"
+    fingerprint="$fp"
+  done
+  echo "$fingerprint"
+}
+
+# The part of the release text that is generated: $1 = certificate digest (may be empty), $2 = "true" when the
+# APKs carry a throw-away key.
+verification_section() {
+  echo "## Verifying the files"
+  echo
+  echo "SHA-256 checksums are in \`SHA256SUMS.txt\`."
+  if [ -n "$1" ]; then
+    echo "The APKs are signed with the certificate \`$1\` (SHA-256)."
+  fi
+  if [ "$2" = "true" ]; then
+    echo
+    echo "> The APKs of this release are signed with a temporary key. The next version cannot be installed over them: uninstall this one first."
+  fi
+}
+SECTION_START='^## (Verifying the files|Проверка файлов)'
+TEMPORARY_MARK='temporary key|временным ключом'
+
+# --- Refreshing the text of a release that is already out -------------------------------------------------
+if [ "$MODE" = "notes" ]; then
+  release=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG") || fail "There is no published release $TAG"
+  mkdir -p published
+  gh release download "$TAG" --pattern '*arm64-v8a.apk' --dir published
+  temporary=false
+  if jq -r '.body' <<< "$release" | grep -qE "$TEMPORARY_MARK"; then temporary=true; fi
+  {
+    cat "$NOTES"
+    echo
+    verification_section "$(apk_fingerprint published/*.apk)" "$temporary"
+  } > release-notes.md
+  gh release edit "$TAG" --notes-file release-notes.md
+  echo "Release $TAG: text updated"
+  exit 0
+fi
 
 OUT=release-out
 mkdir -p "$OUT"
@@ -71,7 +127,7 @@ if [ "$MODE" = "add-files" ]; then
   {
     cat "$NOTES"
     echo
-    jq -r '.body' <<< "$release" | tr -d '\r' | awk '/^## Проверка файлов/ { keep = 1 } keep'
+    jq -r '.body' <<< "$release" | tr -d '\r' | awk -v start="$SECTION_START" '$0 ~ start { keep = 1 } keep'
   } > release-notes.md
   gh release edit "$TAG" --notes-file release-notes.md
   echo "Release $TAG updated"
@@ -81,40 +137,11 @@ fi
 require_key
 (cd "$OUT" && sha256sum Graphite-* > SHA256SUMS.txt)
 
-# Who signed the APKs: lets anyone check that an update comes from the same publisher.
-fingerprint=""
-apksigner=$(ls -d "${ANDROID_HOME:-/usr/local/lib/android/sdk}"/build-tools/*/ 2>/dev/null | sort -V | tail -1)apksigner
-if [ -x "$apksigner" ]; then
-  for apk in "$OUT"/*.apk; do
-    # apksigner fails when the signature does not verify; its wording differs between versions, so only the
-    # digest itself is looked for.
-    report=$("$apksigner" verify --print-certs "$apk" 2>&1) || { echo "$report"; fail "$apk: the signature does not verify"; }
-    fp=$(grep -oiE 'SHA-256 digest: *[0-9a-f]{64}' <<< "$report" | head -1 | grep -oiE '[0-9a-f]{64}' || true)
-    if [ -z "$fp" ]; then
-      echo "::warning::Could not read the signing certificate of $apk; apksigner said:"
-      echo "$report"
-      fingerprint=""
-      break
-    fi
-    [ -z "$fingerprint" ] || [ "$fingerprint" = "$fp" ] || fail "The APKs are signed with different keys"
-    fingerprint="$fp"
-  done
-fi
-
 BODY=release-notes.md
 {
   cat "$NOTES"
   echo
-  echo "## Проверка файлов"
-  echo
-  echo "Контрольные суммы SHA-256 — в файле \`SHA256SUMS.txt\`."
-  if [ -n "$fingerprint" ]; then
-    echo "Отпечаток сертификата, которым подписаны APK: \`$fingerprint\`."
-  fi
-  if [ "${HAS_KEY:-false}" != "true" ]; then
-    echo
-    echo "> APK этого выпуска подписаны временным ключом. Следующую версию нельзя будет установить поверх: сначала придётся удалить эту."
-  fi
+  verification_section "$(apk_fingerprint "$OUT"/*.apk)" "$([ "${HAS_KEY:-false}" = "true" ] && echo false || echo true)"
 } > "$BODY"
 
 # A draft of the same version is replaced; a published release is never overwritten.

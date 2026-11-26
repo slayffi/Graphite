@@ -12,7 +12,8 @@ on:
         description: 'GitHub release from this commit'
         type: choice
         # add-files: upload what a published release of this version does not have yet; nothing is replaced
-        options: ['no', 'draft', 'publish', 'add-files']
+        # notes: refresh the text of a published release from docs/releases
+        options: ['no', 'draft', 'publish', 'add-files', 'notes']
         default: 'no'
       temporary_key:
         description: 'Allow APKs signed with a throw-away key (they cannot be updated later)'
