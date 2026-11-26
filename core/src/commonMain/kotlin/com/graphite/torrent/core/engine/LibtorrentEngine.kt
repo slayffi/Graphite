@@ -104,7 +104,11 @@ class LibtorrentEngine(
     private val clock: () -> Long = System::currentTimeMillis,
 ) : TorrentEngine {
 
-    private val sm = SessionManager(false)
+    // SessionManager's static initializer calls into the JNI library, so load it first.
+    private val sm: SessionManager = run {
+        NativeLibraries.ensureLoaded(nativeExtractDir)
+        SessionManager(false)
+    }
     private val handles = ConcurrentHashMap<String, TorrentHandle>()
     private val removed = ConcurrentHashMap.newKeySet<String>()
     private val cache = ConcurrentHashMap<String, CachedInfo>()

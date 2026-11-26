@@ -54,7 +54,7 @@ libtorrent4j-linux = { module = "org.libtorrent4j:libtorrent4j-linux", version.r
 libtorrent4j-macos = { module = "org.libtorrent4j:libtorrent4j-macos", version.ref = "libtorrent4j" }
 libtorrent4j-android-arm64 = { module = "org.libtorrent4j:libtorrent4j-android-arm64", version.ref = "libtorrent4j" }
 libtorrent4j-android-arm = { module = "org.libtorrent4j:libtorrent4j-android-arm", version.ref = "libtorrent4j" }
-libtorrent4j-android-x86-64 = { module = "org.libtorrent4j:libtorrent4j-android-x86_64", version.ref = "libtorrent4j" }
+libtorrent4j-android-x86-x64 = { module = "org.libtorrent4j:libtorrent4j-android-x86_64", version.ref = "libtorrent4j" }
 libtorrent4j-android-x86 = { module = "org.libtorrent4j:libtorrent4j-android-x86", version.ref = "libtorrent4j" }
 
 # Storage

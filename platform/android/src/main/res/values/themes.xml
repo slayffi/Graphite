@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Graphite" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/graphite_bg</item>
+        <item name="android:colorBackground">@color/graphite_bg</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:colorAccent">@color/graphite_accent</item>
+    </style>
+    <color name="graphite_bg">#FF0B0B0C</color>
+    <color name="graphite_accent">#FFC8C8CC</color>
+</resources>

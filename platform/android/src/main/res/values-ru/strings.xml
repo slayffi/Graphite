@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Graphite</string>
+    <string name="channel_downloads">Идут загрузки</string>
+    <string name="channel_downloads_desc">Скорость и прогресс, пока Graphite скачивает.</string>
+    <string name="channel_completed">Завершённые загрузки</string>
+    <string name="channel_completed_desc">Сообщение, когда загрузка закончена.</string>
+    <string name="notif_downloading">Загружается: %1$d</string>
+    <string name="notif_idle">Graphite готов</string>
+    <string name="notif_paused">Пауза: %1$s</string>
+    <string name="notif_completed">Загрузка завершена</string>
+    <string name="action_pause_all">Пауза</string>
+    <string name="action_resume_all">Продолжить</string>
+    <string name="action_exit">Выход</string>
+    <string name="qr_title">Наведите камеру на QR-код</string>
+    <string name="qr_no_camera">Для сканирования QR-кода нужен доступ к камере.</string>
+    <string name="close">Закрыть</string>
+</resources>

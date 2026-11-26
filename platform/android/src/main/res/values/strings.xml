@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Graphite</string>
+    <string name="channel_downloads">Downloads in progress</string>
+    <string name="channel_downloads_desc">Speed and progress while Graphite is downloading.</string>
+    <string name="channel_completed">Completed downloads</string>
+    <string name="channel_completed_desc">A notice when a download finishes.</string>
+    <string name="notif_downloading">Downloading: %1$d</string>
+    <string name="notif_idle">Graphite is ready</string>
+    <string name="notif_paused">Paused: %1$s</string>
+    <string name="notif_completed">Download complete</string>
+    <string name="action_pause_all">Pause all</string>
+    <string name="action_resume_all">Resume</string>
+    <string name="action_exit">Exit</string>
+    <string name="qr_title">Point the camera at a QR code</string>
+    <string name="qr_no_camera">Camera permission is needed to scan QR codes.</string>
+    <string name="close">Close</string>
+</resources>

@@ -31,3 +31,6 @@ rootProject.name = "Graphite"
 include(":core")
 include(":data")
 include(":ui:designsystem")
+include(":ui:app")
+include(":platform:desktop")
+include(":platform:android")
