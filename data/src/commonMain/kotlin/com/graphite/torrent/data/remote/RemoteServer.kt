@@ -44,8 +44,11 @@ class RemoteServer(
     private val eventLog: EventLogRepository,
     private val scope: CoroutineScope,
     private val clock: () -> Long = System::currentTimeMillis,
-    private val deviceName: String = runCatching { InetAddress.getLocalHost().hostName }.getOrDefault("PC"),
+    deviceName: String? = null,
 ) {
+    // Looking up the host name can take seconds on some networks: only when pairing is really used.
+    private val deviceName: String by lazy { deviceName ?: runCatching { InetAddress.getLocalHost().hostName }.getOrDefault("PC") }
+
     private var server: MiniHttpServer? = null
     private var crypto: RemoteCrypto? = null
     private val seenIds = ConcurrentHashMap<String, Long>()

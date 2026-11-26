@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -55,6 +56,8 @@ fun GraphiteProgressBar(
     status: VisualStatus,
     modifier: Modifier = Modifier,
     height: Dp = GraphiteTheme.dimens.progressBar,
+    /** Moving highlight while active; off for small bars shown by the dozen (file lists). */
+    animated: Boolean = true,
 ) {
     val colors = GraphiteTheme.colors
     val motion = GraphiteTheme.motion
@@ -98,15 +101,15 @@ fun GraphiteProgressBar(
         }
     }
 
-    val shimmerActive = status.isActive && !motion.reduceMotion
-    val shimmer = if (shimmerActive) {
-        val transition = rememberInfiniteTransition(label = "shimmer")
-        transition.animateFloat(
+    // The highlight position is read only while drawing: the animation repaints this bar and nothing is
+    // recomposed or measured again 60 times a second.
+    val shimmer: State<Float>? = if (animated && status.isActive && !motion.reduceMotion) {
+        rememberInfiniteTransition(label = "shimmer").animateFloat(
             initialValue = -0.3f,
             targetValue = 1.3f,
             animationSpec = infiniteRepeatable(tween(motion.shimmerPeriod, easing = LinearEasing), RepeatMode.Restart),
             label = "shimmer-x",
-        ).value
+        )
     } else {
         null
     }
@@ -136,7 +139,7 @@ fun GraphiteProgressBar(
         }
         if (shimmer != null && fillWidth > 0f) {
             val band = size.width * 0.25f
-            val center = shimmer * size.width
+            val center = shimmer.value * size.width
             clipRect(right = fillWidth) {
                 drawRect(
                     brush = Brush.horizontalGradient(

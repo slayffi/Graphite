@@ -35,6 +35,13 @@ sealed interface AddStep {
 data class AddOptions(
     val savePath: String = "",
     val displayPath: String = "",
+    /** The folder the user sees, before it is resolved to a path (Android: may be a content:// tree). */
+    val shownFolder: String = "",
+    /**
+     * Android without "all files" access: the download goes to the app's own storage first and is copied to
+     * the chosen folder when it completes. Said up front, because it needs the space twice for a moment.
+     */
+    val staged: Boolean = false,
     val freeSpace: Long = -1,
     val priorities: Map<Int, FilePriority> = emptyMap(),
     val expanded: Set<String> = emptySet(),
@@ -66,10 +73,13 @@ class AddViewModel(private val env: AppEnvironment) : ViewModel() {
         viewModelScope.launch(env.errorHandler) {
             val settings = env.settings.current()
             val path = env.controller.defaultSavePath()
+            val shown = settings.androidTreeUri.ifBlank { path }
             _options.update {
                 it.copy(
                     savePath = path,
-                    displayPath = env.platform.displayPath(settings.androidTreeUri.ifBlank { path }),
+                    displayPath = env.platform.displayPath(shown),
+                    shownFolder = shown,
+                    staged = isStaged(shown),
                     sequential = settings.sequentialByDefault,
                     startPaused = settings.startPaused,
                 )
@@ -83,7 +93,19 @@ class AddViewModel(private val env: AppEnvironment) : ViewModel() {
         _step.value = AddStep.Choose
         _link.value = ""
         _clipboardMagnet.value = env.platform.readClipboardText()?.let(MagnetLink::findInText)
+        refreshAccess()
     }
+
+    private fun isStaged(folder: String): Boolean =
+        folder.startsWith("content://") && env.platform.supportsAllFilesAccess && !env.platform.hasAllFilesAccess()
+
+    /** Opens the system page for "all files" access. */
+    fun requestAllFilesAccess() {
+        env.platform.requestAllFilesAccess()
+    }
+
+    /** The access may have been granted meanwhile (the user returns from the system page): the hint goes away. */
+    fun refreshAccess() = _options.update { it.copy(staged = isStaged(it.shownFolder)) }
 
     fun setLink(text: String) {
         _link.value = text
@@ -208,7 +230,9 @@ class AddViewModel(private val env: AppEnvironment) : ViewModel() {
     fun chooseFolder() {
         viewModelScope.launch(env.errorHandler) {
             val folder = env.platform.pickFolder() ?: return@launch
-            _options.update { it.copy(savePath = folder, displayPath = env.platform.displayPath(folder)) }
+            _options.update {
+                it.copy(savePath = folder, displayPath = env.platform.displayPath(folder), shownFolder = folder, staged = isStaged(folder))
+            }
             refreshFreeSpace()
         }
     }

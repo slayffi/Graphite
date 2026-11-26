@@ -1,5 +1,8 @@
 package com.graphite.torrent.data
 
+import com.graphite.torrent.core.model.PauseReason
+import com.graphite.torrent.core.model.SessionSnapshot
+import com.graphite.torrent.core.model.TorrentState
 import com.graphite.torrent.core.model.EventType
 import com.graphite.torrent.core.net.BoundedIo
 import com.graphite.torrent.core.net.SafeHttp
@@ -144,5 +147,24 @@ class HardeningTest {
         source.finish(WatchedFile(entry.name, entry.handle), WatchFolderAction.RENAME, success = false)
         assertTrue(File(watched, "huge.torrent.invalid").isFile && !big.exists(), "it is not picked up again on the next scan")
         assertEquals(EventType.WATCH_FOLDER_FAILED, EventType.valueOf("WATCH_FOLDER_FAILED"))
+    }
+
+    @Test
+    fun backgroundServiceIsKeptOnlyWhenSomethingCanHappen() {
+        val e = com.graphite.torrent.testing.FakeTorrentEngine()
+        fun item(state: TorrentState) = e.item(state.name.padEnd(40, 'a'), "x", "/d", state)
+        val running = SessionSnapshot(running = true)
+        fun paused(vararg r: PauseReason) = running.copy(pauseReasons = r.toSet())
+
+        assertTrue(BackgroundPolicy.needsService(listOf(item(TorrentState.DOWNLOADING)), running))
+        assertTrue(BackgroundPolicy.needsService(listOf(item(TorrentState.QUEUED)), running))
+        assertFalse(BackgroundPolicy.needsService(listOf(item(TorrentState.COMPLETED), item(TorrentState.PAUSED)), running), "nothing left to do")
+        // Paused by the user: stop. Paused by a rule: stay alive so that the download resumes by itself.
+        assertFalse(BackgroundPolicy.needsService(listOf(item(TorrentState.PAUSED)), paused(PauseReason.USER)))
+        assertTrue(BackgroundPolicy.needsService(listOf(item(TorrentState.PAUSED)), paused(PauseReason.NO_WIFI)))
+        assertTrue(BackgroundPolicy.needsService(listOf(item(TorrentState.PAUSED)), paused(PauseReason.USER, PauseReason.LOW_BATTERY)))
+        assertFalse(BackgroundPolicy.needsService(listOf(item(TorrentState.COMPLETED)), paused(PauseReason.NO_WIFI)), "only finished downloads: nothing waits")
+        // Files are being copied to the user's folder: always.
+        assertTrue(BackgroundPolicy.needsService(listOf(item(TorrentState.MOVING)), paused(PauseReason.USER)))
     }
 }

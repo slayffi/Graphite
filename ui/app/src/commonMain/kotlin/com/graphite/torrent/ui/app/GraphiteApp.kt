@@ -36,6 +36,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -131,6 +132,21 @@ private fun ProvideViewModelStore(content: @Composable () -> Unit) {
         }
         CompositionLocalProvider(LocalViewModelStoreOwner provides owner, content = content)
     }
+}
+
+/**
+ * View models of one screen instance: created with it and cleared when it leaves, so that a closed details
+ * page does not keep asking the engine about its torrent for as long as the app runs.
+ */
+@Composable
+private fun rememberScreenStore(key: Any): ViewModelStoreOwner {
+    val owner = remember(key) {
+        object : ViewModelStoreOwner {
+            override val viewModelStore: ViewModelStore = ViewModelStore()
+        }
+    }
+    DisposableEffect(owner) { onDispose { owner.viewModelStore.clear() } }
+    return owner
 }
 
 @Composable
@@ -333,7 +349,7 @@ private fun DownloadsPane(
             Box(Modifier.weight(1f).fillMaxHeight()) {
                 if (details != null) {
                     DetailsScreen(
-                        viewModel(key = "details-${details.id}") { DetailsViewModel(env, details.id) },
+                        viewModel(rememberScreenStore(details.id)) { DetailsViewModel(env, details.id) },
                         onBack = null,
                         onShowMessage = onShowMessage,
                         onPlay = { index, title -> onPlay(details.id, index, title) },
@@ -345,7 +361,7 @@ private fun DownloadsPane(
         }
     } else if (details != null) {
         DetailsScreen(
-            viewModel(key = "details-${details.id}") { DetailsViewModel(env, details.id) },
+            viewModel(rememberScreenStore(details.id)) { DetailsViewModel(env, details.id) },
             onBack = { navigator.back() },
             onShowMessage = onShowMessage,
             onPlay = { index, title -> onPlay(details.id, index, title) },

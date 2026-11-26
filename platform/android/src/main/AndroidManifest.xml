@@ -97,6 +97,10 @@
         </service>
 
         <receiver
+            android:name=".android.TorrentService$ProbeReceiver"
+            android:exported="false" />
+
+        <receiver
             android:name=".android.GraphiteWidgetReceiver"
             android:exported="true"
             android:label="@string/widget_name">

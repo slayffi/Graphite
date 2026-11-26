@@ -17,7 +17,6 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.launch
 import java.io.File
@@ -44,6 +43,9 @@ class GraphiteApplication : Application(), Configuration.Provider {
     /** True once the services exist; the widget, the tile and the service check it. */
     @Volatile var ready = false
         private set
+
+    /** The start animation was already played in this process. */
+    var splashShown = false
 
     /** WorkManager is initialized lazily with this (see the manifest); only the widget needs it. */
     override val workManagerConfiguration: Configuration
@@ -74,8 +76,6 @@ class GraphiteApplication : Application(), Configuration.Provider {
         }
         Notifications.createChannels(this)
         val storage = AndroidStorage(this)
-        StartupGuard.step("native library")
-        NativeLibraries.ensureLoaded(null)
         StartupGuard.step("services")
         services = GraphiteServices.create(
             dataDir = File(filesDir, "graphite"),
@@ -108,6 +108,9 @@ class GraphiteApplication : Application(), Configuration.Provider {
         services.scope.launch {
             try {
                 applyAndroidDefaults()
+                // Loading the native library takes a while: here, not on the UI thread, so the first frame is not held back.
+                StartupGuard.step("native library")
+                NativeLibraries.ensureLoaded(null)
                 StartupGuard.step("engine start")
                 services.controller.start()
                 StartupGuard.step("engine running")
@@ -118,16 +121,18 @@ class GraphiteApplication : Application(), Configuration.Provider {
             } catch (e: Exception) {
                 // Without the engine the app is useless: show what went wrong instead of an empty list.
                 CrashReporter.report(this@GraphiteApplication, e)
+            } catch (e: LinkageError) {
+                // The native library does not load on this device (unsupported CPU, damaged install).
+                CrashReporter.report(this@GraphiteApplication, e)
             }
         }
         PowerNetworkMonitor(this, services.settings, services.controller, services.scope).start()
 
-        // Keep the foreground service running while something downloads.
+        // Keep the foreground service running while something downloads, moves or waits for a rule to clear.
         services.scope.launch {
-            services.controller.torrents
-                .map { list -> list.any { it.state in TorrentService.ACTIVE } }
+            combine(services.controller.torrents, services.controller.session) { t, s -> TorrentService.needsService(t, s) }
                 .distinctUntilChanged()
-                .collect { active -> if (active) TorrentService.start(this@GraphiteApplication) }
+                .collect { needed -> if (needed) TorrentService.start(this@GraphiteApplication) }
         }
 
         // System notification when a download completes.
@@ -139,15 +144,12 @@ class GraphiteApplication : Application(), Configuration.Provider {
             }
         }
 
-        // Home screen widget and quick settings tile follow the local engine.
+        // Home screen widget: only what it displays (rounded), and not more often than is useful on a home screen.
         services.scope.launch {
-            combine(services.controller.torrents, services.controller.session) { t, s -> WidgetSummary.of(t, s) }
+            combine(services.controller.torrents, services.controller.session) { t, s -> WidgetSummary.of(t, s).rounded() }
                 .distinctUntilChanged()
                 .sample(WIDGET_REFRESH_MS)
-                .collect { summary ->
-                    GraphiteWidget.push(this@GraphiteApplication, summary)
-                    GraphiteTileService.refresh(this@GraphiteApplication)
-                }
+                .collect { summary -> GraphiteWidget.push(this@GraphiteApplication, summary) }
         }
     }
 
@@ -176,6 +178,6 @@ class GraphiteApplication : Application(), Configuration.Provider {
     }
 
     private companion object {
-        const val WIDGET_REFRESH_MS = 3_000L
+        const val WIDGET_REFRESH_MS = 10_000L
     }
 }

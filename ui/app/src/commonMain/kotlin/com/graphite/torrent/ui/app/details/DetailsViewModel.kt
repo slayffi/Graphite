@@ -13,7 +13,6 @@ import com.graphite.torrent.core.model.TorrentItem
 import com.graphite.torrent.core.model.TorrentState
 import com.graphite.torrent.core.model.TrackerEntry
 import com.graphite.torrent.ui.app.AppEnvironment
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,6 +21,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
@@ -52,32 +53,33 @@ class DetailsViewModel(private val env: AppEnvironment, val torrentId: String) :
     val categories = env.meta.categories
     val streamingAvailable: Boolean = env.features.streaming != null
 
-    private var poller: Job? = null
-
     init {
-        startPolling()
         // Files are needed by the overview too (playable files), load them once immediately.
         viewModelScope.launch(env.errorHandler) { refresh(DetailsTab.FILES) }
+        // The open tab is refreshed only while the screen is really shown: the UI stops collecting [tab]
+        // when the app goes to the background, and the engine is left alone until it returns.
+        viewModelScope.launch(env.errorHandler) {
+            _tab.subscriptionCount.map { it > 0 }.distinctUntilChanged().collectLatest { shown ->
+                if (shown) {
+                    _tab.collectLatest { tab ->
+                        while (isActive) {
+                            refresh(tab)
+                            delay(POLL_MS)
+                        }
+                    }
+                }
+            }
+        }
     }
 
     fun selectTab(tab: DetailsTab) {
         _tab.value = tab
-        startPolling()
-    }
-
-    private fun startPolling() {
-        poller?.cancel()
-        poller = viewModelScope.launch(env.errorHandler) {
-            while (isActive) {
-                refresh(_tab.value)
-                delay(POLL_MS)
-            }
-        }
     }
 
     private suspend fun refresh(tab: DetailsTab) {
         val live = item.value?.let { it.finalLocation == null } ?: true
         if (!live) return
+        // Unchanged lists are dropped by the StateFlow itself (equal value), so nothing is redrawn.
         runCatching {
             when (tab) {
                 DetailsTab.OVERVIEW -> Unit

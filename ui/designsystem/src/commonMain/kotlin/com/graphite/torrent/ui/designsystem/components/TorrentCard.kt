@@ -26,11 +26,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -81,19 +83,22 @@ fun StatusIcon(status: VisualStatus, modifier: Modifier = Modifier) {
         else -> colors.accent
     }
     val spinning = status == VisualStatus.CHECKING && !GraphiteTheme.motion.reduceMotion
-    val angle = if (spinning) {
-        rememberInfiniteTransition(label = "spin").animateFloat(
+    val base = modifier.size(GraphiteTheme.dimens.iconSmall)
+    val spin = if (spinning) {
+        val angle = rememberInfiniteTransition(label = "spin").animateFloat(
             0f, 360f, infiniteRepeatable(tween(1200, easing = LinearEasing), RepeatMode.Restart), label = "spin-angle",
-        ).value
+        )
+        // Layer property: the icon turns without being recomposed on every frame.
+        base.graphicsLayer { rotationZ = angle.value }
     } else {
-        0f
+        base
     }
-    Icon(status.icon(), contentDescription = null, tint = tint, modifier = modifier.size(GraphiteTheme.dimens.iconSmall).rotate(angle))
+    Icon(status.icon(), contentDescription = null, tint = tint, modifier = spin)
 }
 
 /**
- * Torrent card: name (middle-ellipsized), "status · speed · done of total · ETA" below, big
- * monospaced percent on the right and a 3dp progress bar along the bottom edge.
+ * Torrent card: name (middle-ellipsized), "status · speed · done of total" below, big monospaced
+ * percent with the time left on the right and a 3dp progress bar along the bottom edge.
  */
 @Composable
 fun TorrentCard(
@@ -114,10 +119,11 @@ fun TorrentCard(
         else -> colors.border
     }
     val details = buildList {
-        add(state.statusLabel)
+        // While downloading the arrow and the speed already say it; the word would push the size off a phone screen.
+        val speedSaysIt = state.status == VisualStatus.DOWNLOADING && state.speedText.isNotEmpty()
+        if (!speedSaysIt) add(state.statusLabel)
         if (state.speedText.isNotEmpty()) add(state.speedText)
         if (state.sizeText.isNotEmpty()) add(state.sizeText)
-        if (state.etaText.isNotEmpty()) add(state.etaText)
     }.joinToString(" · ")
 
     Box(
@@ -127,7 +133,7 @@ fun TorrentCard(
             .border(GraphiteTheme.dimens.borderWidth, borderColor, shape)
             .semantics(mergeDescendants = true) {
                 contentDescription = "${state.name}. ${state.statusLabel}. ${state.percentText}"
-                stateDescription = details
+                stateDescription = listOf(state.speedText, state.sizeText, state.etaText).filter { it.isNotEmpty() }.joinToString(" · ")
             },
     ) {
         Column {
@@ -170,12 +176,18 @@ fun TorrentCard(
                     }
                 }
                 Spacer(Modifier.width(spacing.sm))
-                Text(
-                    state.percentText,
-                    style = GraphiteTheme.typography.numberLarge,
-                    color = if (state.status == VisualStatus.PAUSED || state.status == VisualStatus.QUEUED) colors.textSecondary else colors.textPrimary,
-                    maxLines = 1,
-                )
+                // Percent with the time left under it: the line on the left stays short enough for a phone.
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        state.percentText,
+                        style = GraphiteTheme.typography.numberLarge,
+                        color = if (state.status == VisualStatus.PAUSED || state.status == VisualStatus.QUEUED) colors.textSecondary else colors.textPrimary,
+                        maxLines = 1,
+                    )
+                    if (state.etaText.isNotEmpty()) {
+                        Text(state.etaText, style = GraphiteTheme.typography.numberCaption, color = colors.textSecondary, maxLines = 1)
+                    }
+                }
             }
             GraphiteProgressBar(state.progress, state.status, Modifier.fillMaxWidth())
         }
@@ -203,24 +215,28 @@ private fun SelectionMark(selected: Boolean, modifier: Modifier = Modifier) {
 fun SkeletonBlock(modifier: Modifier = Modifier) {
     val colors = GraphiteTheme.colors
     val motion = GraphiteTheme.motion
-    val x = if (motion.reduceMotion) {
-        0.5f
+    val x: State<Float>? = if (motion.reduceMotion) {
+        null
     } else {
         rememberInfiniteTransition(label = "skeleton").animateFloat(
             -1f, 2f, infiniteRepeatable(tween(motion.shimmerPeriod, easing = LinearEasing)), label = "skeleton-x",
-        ).value
+        )
     }
+    val highlight = colors.surface3
     Box(
         modifier
             .clip(GraphiteTheme.shapes.control)
             .background(colors.surface2)
-            .background(
-                Brush.linearGradient(
-                    listOf(Color.Transparent, colors.surface3, Color.Transparent),
-                    start = androidx.compose.ui.geometry.Offset(x * 600f - 300f, 0f),
-                    end = androidx.compose.ui.geometry.Offset(x * 600f, 0f),
-                ),
-            ),
+            .drawBehind {
+                val at = x?.value ?: 0.5f
+                drawRect(
+                    Brush.linearGradient(
+                        listOf(Color.Transparent, highlight, Color.Transparent),
+                        start = androidx.compose.ui.geometry.Offset(at * 600f - 300f, 0f),
+                        end = androidx.compose.ui.geometry.Offset(at * 600f, 0f),
+                    ),
+                )
+            },
     )
 }
 
@@ -254,7 +270,7 @@ private fun TorrentCardPreview() {
                     progress = 0.62f,
                     percentText = "62%",
                     speedText = "12,4 МБ/с",
-                    sizeText = "2,8 ГБ из 4,5 ГБ",
+                    sizeText = "2,8 из 4,5 ГБ",
                     etaText = "2м 18с",
                     tags = listOf("Сериалы"),
                 ),

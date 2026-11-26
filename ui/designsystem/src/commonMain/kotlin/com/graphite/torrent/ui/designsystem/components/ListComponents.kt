@@ -110,7 +110,8 @@ fun TreeRow(
             Text(subtitle, style = GraphiteTheme.typography.numberCaption, color = colors.textSecondary, maxLines = 1)
             if (progress != null) {
                 Spacer(Modifier.size(4.dp))
-                GraphiteProgressBar(progress, if (progress >= 1f) VisualStatus.MOVING else VisualStatus.PAUSED, height = 2.dp)
+                // Dozens of these are on screen at once: no moving highlight.
+                GraphiteProgressBar(progress, if (progress >= 1f) VisualStatus.DOWNLOADING else VisualStatus.PAUSED, height = 2.dp, animated = false)
             }
         }
         if (trailing != null) {

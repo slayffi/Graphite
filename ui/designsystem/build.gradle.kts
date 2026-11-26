@@ -47,3 +47,8 @@ compose.resources {
     packageOfResClass = "com.graphite.torrent.ui.designsystem.resources"
     generateResClass = always
 }
+
+composeCompiler {
+    // Models of :core are immutable but compiled without the Compose compiler; see the file for the list.
+    stabilityConfigurationFiles.add(rootProject.layout.projectDirectory.file("compose-stability.conf"))
+}

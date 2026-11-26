@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -176,6 +177,24 @@ private fun PreviewContent(step: AddStep.Preview, viewModel: AddViewModel, onDis
                     style = GraphiteTheme.typography.numberCaption,
                     color = if (notEnough) colors.errorText else colors.textSecondary,
                 )
+            }
+            if (options.staged) {
+                LifecycleResumeEffect(Unit) {
+                    viewModel.refreshAccess()
+                    onPauseOrDispose {}
+                }
+                Spacer(Modifier.height(spacing.sm))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(GraphiteIcons.Info, null, tint = colors.textSecondary, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(spacing.xs))
+                    Text(
+                        stringResource(Res.string.add_staged_hint),
+                        style = GraphiteTheme.typography.caption,
+                        color = colors.textSecondary,
+                        modifier = Modifier.weight(1f),
+                    )
+                    GraphiteButton(stringResource(Res.string.allow), viewModel::requestAllFilesAccess, kind = ButtonKind.TERTIARY)
+                }
             }
         }
 

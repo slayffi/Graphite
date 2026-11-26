@@ -85,3 +85,8 @@ tasks.withType<JavaExec>().configureEach {
         }
     }
 }
+
+composeCompiler {
+    // Models of :core are immutable but compiled without the Compose compiler; see the file for the list.
+    stabilityConfigurationFiles.add(rootProject.layout.projectDirectory.file("compose-stability.conf"))
+}

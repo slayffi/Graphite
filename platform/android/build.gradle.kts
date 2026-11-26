@@ -93,3 +93,8 @@ dependencies {
     implementation(libs.libtorrent4j.android.x86.x64)
     implementation(libs.libtorrent4j.android.x86)
 }
+
+composeCompiler {
+    // Models of :core are immutable but compiled without the Compose compiler; see the file for the list.
+    stabilityConfigurationFiles.add(rootProject.layout.projectDirectory.file("compose-stability.conf"))
+}

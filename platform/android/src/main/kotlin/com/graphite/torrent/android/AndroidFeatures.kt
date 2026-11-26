@@ -2,6 +2,7 @@ package com.graphite.torrent.android
 
 import android.content.Context
 import android.net.Uri
+import android.provider.DocumentsContract
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
@@ -197,20 +198,48 @@ class AndroidRemote(private val services: GraphiteServices, private val scope: C
 class SafWatchFolderSource(private val context: Context) : WatchFolderSource {
     override fun supports(location: String) = location.startsWith("content://")
 
+    // Every look is a call into another app (the documents provider): keep the phone asleep longer.
+    override val pollIntervalMs: Long get() = 30_000L
+
+    /** One query for the whole folder; DocumentFile would ask the provider three times per file. */
     override fun list(location: String): List<WatchedFile> {
-        val tree = DocumentFile.fromTreeUri(context, Uri.parse(location)) ?: return emptyList()
-        return tree.listFiles()
-            .filter { it.isFile && (it.name?.lowercase()?.endsWith(".torrent") == true) }
-            .sortedBy { it.lastModified() }
-            .map { WatchedFile(it.name.orEmpty(), it.uri.toString()) }
+        val tree = Uri.parse(location)
+        val children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
+        val columns = arrayOf(
+            DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+            DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+            DocumentsContract.Document.COLUMN_MIME_TYPE,
+            DocumentsContract.Document.COLUMN_LAST_MODIFIED,
+        )
+        val found = ArrayList<Pair<Long, WatchedFile>>()
+        context.contentResolver.query(children, columns, null, null, null)?.use { c ->
+            while (c.moveToNext() && found.size < MAX_LISTED) {
+                val id = c.getString(0) ?: continue
+                val name = c.getString(1) ?: continue
+                if (c.getString(2) == DocumentsContract.Document.MIME_TYPE_DIR || !name.lowercase().endsWith(".torrent")) continue
+                found += c.getLong(3) to WatchedFile(name, DocumentsContract.buildDocumentUriUsingTree(tree, id).toString())
+            }
+        }
+        return found.sortedBy { it.first }.map { it.second }
     }
 
     override fun read(file: WatchedFile): ByteArray =
         context.contentResolver.openInputStream(Uri.parse(file.handle))?.use { BoundedIo.read(it, BoundedIo.MAX_TORRENT_BYTES) } ?: ByteArray(0)
 
     override fun finish(file: WatchedFile, action: WatchFolderAction, success: Boolean) {
-        val doc = DocumentFile.fromSingleUri(context, Uri.parse(file.handle)) ?: return
-        if (success && action == WatchFolderAction.DELETE) doc.delete()
-        else if (!doc.renameTo(file.name + if (success) ".added" else ".invalid")) doc.delete()
+        val uri = Uri.parse(file.handle)
+        val resolver = context.contentResolver
+        fun delete() = runCatching { DocumentsContract.deleteDocument(resolver, uri) }
+        if (success && action == WatchFolderAction.DELETE) {
+            delete()
+            return
+        }
+        // The file must stop matching "*.torrent", otherwise it would be added again on every look.
+        val renamed = runCatching { DocumentsContract.renameDocument(resolver, uri, file.name + if (success) ".added" else ".invalid") }.getOrNull()
+        if (renamed == null) delete()
+    }
+
+    private companion object {
+        const val MAX_LISTED = 200
     }
 }

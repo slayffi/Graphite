@@ -1,6 +1,7 @@
 package com.graphite.torrent.core.engine
 
 import org.libtorrent4j.alerts.CacheFlushedAlert
+import org.libtorrent4j.alerts.StateUpdateAlert
 import com.graphite.torrent.core.model.AddRequest
 import com.graphite.torrent.core.model.AddSource
 import com.graphite.torrent.core.model.ErrorKind
@@ -105,8 +106,9 @@ class LibtorrentEngine(
     private val clock: () -> Long = System::currentTimeMillis,
 ) : TorrentEngine {
 
-    // SessionManager's static initializer calls into the JNI library, so load it first.
-    private val sm: SessionManager = run {
+    // SessionManager's static initializer calls into the JNI library, so load it first. Lazy: creating the
+    // engine object (app start, UI thread) must not wait for a 10 MB native library; start() runs in the background.
+    private val sm: SessionManager by lazy {
         NativeLibraries.ensureLoaded(nativeExtractDir)
         SessionManager(false)
     }
@@ -116,6 +118,17 @@ class LibtorrentEngine(
     private val pendingAdds = ConcurrentHashMap<String, CompletableDeferred<TorrentHandle>>()
     private val pendingResume = ConcurrentHashMap<String, CompletableDeferred<Unit>>()
     private val pendingFlush = ConcurrentHashMap<String, CompletableDeferred<Unit>>()
+
+    /** Latest state of every torrent. Updated from libtorrent's "what changed" list, not by asking each torrent. */
+    private val items = ConcurrentHashMap<String, TorrentItem>()
+    private val publishLock = Any()
+
+    /** Set by anything that can change a torrent which is otherwise idle (commands, alerts): next tick polls all. */
+    @Volatile private var fullRefresh = true
+
+    /** How many per-torrent updates arrived through state_update_alert (diagnostics and tests). */
+    @Volatile internal var stateUpdates = 0L
+        private set
     private val lastAllTime = ConcurrentHashMap<String, LongArray>()
 
     private val _torrents = MutableStateFlow<Map<String, TorrentItem>>(emptyMap())
@@ -196,11 +209,14 @@ class LibtorrentEngine(
         s.cancel()
         scope = null
         handles.clear()
+        items.clear()
+        fullRefresh = true
         _torrents.value = emptyMap()
         _session.value = _session.value.copy(running = false, downloadRate = 0, uploadRate = 0)
     }
 
     override fun updateConfig(config: EngineConfig) {
+        fullRefresh = true
         val previous = this.config
         this.config = config
         if (scope == null) return
@@ -225,6 +241,7 @@ class LibtorrentEngine(
 
     override fun setPauseReasons(reasons: Set<PauseReason>) {
         pauseReasons = reasons
+        fullRefresh = true
         if (scope != null) applySessionPause()
         _session.value = _session.value.copy(pauseReasons = reasons)
     }
@@ -255,9 +272,8 @@ class LibtorrentEngine(
         .or_(Alert.STATUS_NOTIFICATION)
         .or_(Alert.STORAGE_NOTIFICATION)
         .or_(Alert.PORT_MAPPING_NOTIFICATION)
-        .or_(Alert.PERFORMANCE_WARNING)
-        .or_(Alert.IP_BLOCK_NOTIFICATION)
-        .or_(Alert.TRACKER_NOTIFICATION)
+        // Needed for incoming_connection_alert (is the port reachable?). Tracker, IP-block and performance
+        // alerts are not listened to, so libtorrent is not asked to produce them.
         .or_(Alert.PEER_NOTIFICATION)
         .to_int()
 
@@ -353,7 +369,9 @@ class LibtorrentEngine(
     override suspend fun saveAllResumeData() {
         if (scope == null) return
         val waits = ArrayList<CompletableDeferred<Unit>>()
-        val flags = TorrentHandle.SAVE_INFO_DICT.or_(TorrentHandle.FLUSH_DISK_CACHE)
+        // ONLY_IF_MODIFIED: unchanged torrents answer at once with "nothing to save" instead of being
+        // serialised and written again (hundreds of files on every exit).
+        val flags = TorrentHandle.SAVE_INFO_DICT.or_(TorrentHandle.FLUSH_DISK_CACHE).or_(TorrentHandle.ONLY_IF_MODIFIED)
         for ((id, h) in handles) {
             if (!h.isValid) continue
             val d = CompletableDeferred<Unit>()
@@ -386,7 +404,10 @@ class LibtorrentEngine(
     }
 
     private fun handleAlert(alert: Alert<*>) {
+        // Torrent-level events can change torrents that post no status updates (paused, finished).
+        if (alert is TorrentAlert<*> && alert !is StateUpdateAlert) fullRefresh = true
         when (alert) {
+            is StateUpdateAlert -> return onStateUpdate(alert.status())
             is AddTorrentAlert -> onAdded(alert)
             is TorrentFinishedAlert -> onFinished(alert.handle())
             is SaveResumeDataAlert -> onResumeData(alert)
@@ -457,6 +478,7 @@ class LibtorrentEngine(
         val id = idOf(alert.handle())
         val h = sm.find(Sha1Hash.parseHex(id))?.takeIf { it.isValid } ?: return
         handles[id] = h
+        fullRefresh = true
         removed.remove(id)
         val info = cache.getOrPut(id) { CachedInfo() }
         info.savePath = runCatching { h.savePath() }.getOrDefault(params.getSavePath())
@@ -577,42 +599,83 @@ class LibtorrentEngine(
     // Status loop
     // ---------------------------------------------------------------------------------------------
 
+    /**
+     * Once a second. Normally this only asks libtorrent to post one alert listing the torrents whose status
+     * changed (state_update_alert): paused and finished torrents cost nothing. A full poll of every torrent
+     * (one blocking call each) runs only after commands or events, and every [FULL_REFRESH_TICKS] as a safety net.
+     */
     private suspend fun statusLoop() {
+        var tick = 0
         while (scope?.isActive == true) {
-            runCatching { refresh() }
+            runCatching {
+                if (fullRefresh || tick % FULL_REFRESH_TICKS == 0) {
+                    fullRefresh = false
+                    pollAll()
+                } else if (handles.isNotEmpty()) {
+                    sm.postTorrentUpdates()
+                }
+                publish()
+            }
+            tick++
             delay(STATUS_INTERVAL_MS)
         }
     }
 
-    private fun refresh() {
+    private fun pollAll() {
         val zero = isZeroUpload()
         val sessionPaused = pauseReasons.isNotEmpty()
-        val items = HashMap<String, TorrentItem>(handles.size)
+        for ((id, h) in handles) {
+            if (!h.isValid) continue
+            val st = runCatching { h.status() }.getOrNull() ?: continue
+            absorb(id, h, st, zero, sessionPaused)
+        }
+        items.keys.retainAll(handles.keys)
+        lastAllTime.keys.retainAll(handles.keys)
+    }
+
+    /** Called on the alert thread; the status objects belong to the alert and are converted right here. */
+    private fun onStateUpdate(statuses: List<TorrentStatus>) {
+        if (statuses.isEmpty()) return
+        stateUpdates += statuses.size
+        val zero = isZeroUpload()
+        val sessionPaused = pauseReasons.isNotEmpty()
+        for (st in statuses) {
+            val id = runCatching { TorrentMapping.idOf(st.infoHashes) }.getOrNull() ?: continue
+            val h = handles[id] ?: continue
+            absorb(id, h, st, zero, sessionPaused)
+        }
+        publish()
+    }
+
+    private fun absorb(id: String, h: TorrentHandle, st: TorrentStatus, zero: Boolean, sessionPaused: Boolean) {
+        if (zero && st.isFinished) {
+            val f = st.flags()
+            if (f.and_(TorrentFlags.AUTO_MANAGED).non_zero() || !f.and_(TorrentFlags.PAUSED).non_zero()) {
+                enforceZeroUpload(h)
+            }
+        }
+        items[id] = toItem(id, h, st, sessionPaused)
+        accountTraffic(id, st)
+    }
+
+    private fun publish() = synchronized(publishLock) {
         var downRate = 0L
         var upRate = 0L
         var allTimeUp = 0L
         var active = 0
-        for ((id, h) in handles) {
-            if (!h.isValid) continue
-            val st = runCatching { h.status() }.getOrNull() ?: continue
-            if (zero && st.isFinished) {
-                val f = st.flags()
-                if (f.and_(TorrentFlags.AUTO_MANAGED).non_zero() || !f.and_(TorrentFlags.PAUSED).non_zero()) {
-                    enforceZeroUpload(h)
-                }
-            }
-            val item = toItem(id, h, st, sessionPaused)
-            items[id] = item
+        val snapshot = HashMap<String, TorrentItem>(items.size)
+        for ((id, item) in items) {
+            if (!handles.containsKey(id)) continue
+            snapshot[id] = item
             downRate += item.downloadRate
             upRate += item.uploadRate
             allTimeUp += item.uploadedPayload
             if (item.state == TorrentState.DOWNLOADING || item.state == TorrentState.METADATA ||
                 item.state == TorrentState.CHECKING
             ) active++
-            accountTraffic(id, st)
         }
-        lastAllTime.keys.retainAll(items.keys)
-        _torrents.value = items
+        // StateFlow drops the update when nothing changed, so idle ticks cost no work downstream.
+        _torrents.value = snapshot
 
         val portStatus = when {
             listenFailed && !listening -> PortStatus.FAILED
@@ -628,13 +691,13 @@ class LibtorrentEngine(
             sessionUploaded = sessionUploaded,
             allTimeUploaded = allTimeUp,
             activeTorrents = active,
-            totalTorrents = items.size,
+            totalTorrents = snapshot.size,
             dhtNodes = runCatching { sm.dhtNodes() }.getOrDefault(0L),
             listenPort = listenPort,
             portStatus = portStatus,
             externalAddress = externalAddress,
             pauseReasons = pauseReasons,
-            zeroUpload = zero,
+            zeroUpload = isZeroUpload(),
             running = true,
         )
     }
@@ -667,8 +730,10 @@ class LibtorrentEngine(
             st.isMovingStorage -> TorrentState.MOVING
             lt == TorrentStatus.State.CHECKING_FILES || lt == TorrentStatus.State.CHECKING_RESUME_DATA -> TorrentState.CHECKING
             st.isFinished && st.hasMetadata() -> TorrentState.COMPLETED
+            // While everything is paused (by the user or a rule) nothing is "waiting for a slot".
+            sessionPaused -> TorrentState.PAUSED
             paused && autoManaged -> TorrentState.QUEUED
-            paused || sessionPaused -> TorrentState.PAUSED
+            paused -> TorrentState.PAUSED
             lt == TorrentStatus.State.DOWNLOADING_METADATA -> TorrentState.METADATA
             else -> TorrentState.DOWNLOADING
         }
@@ -878,6 +943,7 @@ class LibtorrentEngine(
         handles[id]?.takeIf { it.isValid } ?: throw GraphiteException(ErrorKind.UNKNOWN, "unknown torrent $id")
 
     override fun pause(id: String) {
+        fullRefresh = true
         val h = handle(id)
         h.unsetFlags(TorrentFlags.AUTO_MANAGED)
         h.pause()
@@ -885,6 +951,7 @@ class LibtorrentEngine(
     }
 
     override fun resume(id: String) {
+        fullRefresh = true
         val h = handle(id)
         val st = h.status()
         if (st.errorCode().isError) h.swig().clear_error()
@@ -896,6 +963,7 @@ class LibtorrentEngine(
 
     override fun remove(id: String, deleteFiles: Boolean) {
         val h = handles.remove(id) ?: return
+        items.remove(id)
         removed += id
         lastAllTime.remove(id)
         pendingResume.remove(id)?.complete(Unit)
@@ -905,12 +973,14 @@ class LibtorrentEngine(
     }
 
     override fun recheck(id: String) {
+        fullRefresh = true
         val h = handle(id)
         if (h.status().errorCode().isError) h.swig().clear_error()
         h.forceRecheck()
     }
 
     override fun move(id: String, targetDir: String) {
+        fullRefresh = true
         val dir = File(targetDir)
         if (!dir.isDirectory && !dir.mkdirs()) throw GraphiteException(ErrorKind.FOLDER_UNAVAILABLE, targetDir)
         if (!dir.canWrite()) throw GraphiteException(ErrorKind.PERMISSION_DENIED, targetDir)
@@ -918,6 +988,7 @@ class LibtorrentEngine(
     }
 
     override fun setFilePriorities(id: String, priorities: Map<Int, FilePriority>) {
+        fullRefresh = true
         val h = handle(id)
         val current = h.filePriorities()
         if (current.isEmpty()) return
@@ -937,12 +1008,14 @@ class LibtorrentEngine(
     }
 
     override fun setSequential(id: String, enabled: Boolean) {
+        fullRefresh = true
         val h = handle(id)
         if (enabled) h.setFlags(TorrentFlags.SEQUENTIAL_DOWNLOAD) else h.unsetFlags(TorrentFlags.SEQUENTIAL_DOWNLOAD)
         requestResumeSave(h)
     }
 
     override fun setQueuePosition(id: String, position: Int) {
+        fullRefresh = true
         val h = handle(id)
         h.queuePositionSet(position.coerceAtLeast(0))
     }
@@ -1172,6 +1245,7 @@ class LibtorrentEngine(
 
     companion object {
         const val STATUS_INTERVAL_MS = 1000L
+        const val FULL_REFRESH_TICKS = 15
         const val RESUME_SAVE_INTERVAL_MS = 30_000L
         const val RESUME_FLUSH_TIMEOUT_MS = 8_000L
         const val ADD_TIMEOUT_MS = 30_000L
@@ -1193,6 +1267,7 @@ class LibtorrentEngine(
             AlertType.SAVE_RESUME_DATA.swig(),
             AlertType.SAVE_RESUME_DATA_FAILED.swig(),
             AlertType.CACHE_FLUSHED.swig(),
+            AlertType.STATE_UPDATE.swig(),
             AlertType.METADATA_RECEIVED.swig(),
             AlertType.TORRENT_ERROR.swig(),
             AlertType.FILE_ERROR.swig(),

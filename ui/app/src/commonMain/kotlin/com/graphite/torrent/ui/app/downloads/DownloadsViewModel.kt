@@ -48,11 +48,13 @@ data class DownloadsUiState(
 
 /** Pure filtering and sorting, kept separate for unit tests. */
 object ListLogic {
+    private val ACTIVE_STATES = setOf(
+        TorrentState.DOWNLOADING, TorrentState.METADATA, TorrentState.CHECKING, TorrentState.MOVING, TorrentState.QUEUED,
+    )
+
     fun matches(item: TorrentItem, filter: StatusFilter): Boolean = when (filter) {
         StatusFilter.ALL -> true
-        StatusFilter.ACTIVE -> item.state in setOf(
-            TorrentState.DOWNLOADING, TorrentState.METADATA, TorrentState.CHECKING, TorrentState.MOVING, TorrentState.QUEUED,
-        )
+        StatusFilter.ACTIVE -> item.state in ACTIVE_STATES
         StatusFilter.PAUSED -> item.state == TorrentState.PAUSED || item.state == TorrentState.ERROR
         StatusFilter.COMPLETED -> item.state == TorrentState.COMPLETED
     }
@@ -96,19 +98,33 @@ class DownloadsViewModel(private val env: AppEnvironment) : ViewModel() {
         selection,
         combine(env.meta.categories, env.meta.allTags) { c, t -> c.map { it.name } to t },
         combine(loaded, env.controller.session) { l, s -> l || s.running },
-    ) { items, f, sel, (cats, tags), ready ->
-        val visible = ListLogic.apply(items, f)
-        DownloadsUiState(
-            loading = !ready && items.isEmpty(),
-            items = visible,
-            counts = ListLogic.counts(items),
-            filters = f,
-            selection = sel.filterTo(LinkedHashSet()) { id -> items.any { it.id == id } },
-            categories = (cats + items.mapNotNull { it.category }).distinct().sorted(),
-            tags = tags,
-            totalCount = items.size,
+    ) { items, f, sel, (cats, tags), ready -> uiState(items, f, sel, cats, tags, ready) }
+        // Stops a few seconds after the list is no longer shown (app in the background): a download must not
+        // keep filtering and sorting for a screen nobody sees. The first value is ready at once, so the list
+        // does not flash a placeholder when the screen comes back.
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5_000),
+            uiState(env.controller.torrents.value, filters.value, emptySet(), emptyList(), emptyList(), env.controller.session.value.running),
         )
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, DownloadsUiState())
+
+    private fun uiState(
+        items: List<TorrentItem>,
+        f: ListFilters,
+        sel: Set<String>,
+        cats: List<String>,
+        tags: List<String>,
+        ready: Boolean,
+    ) = DownloadsUiState(
+        loading = !ready && items.isEmpty(),
+        items = ListLogic.apply(items, f),
+        counts = ListLogic.counts(items),
+        filters = f,
+        selection = if (sel.isEmpty()) sel else sel.filterTo(LinkedHashSet()) { id -> items.any { it.id == id } },
+        categories = (cats + items.mapNotNull { it.category }).distinct().sorted(),
+        tags = tags,
+        totalCount = items.size,
+    )
 
     init {
         viewModelScope.launch(env.errorHandler) {

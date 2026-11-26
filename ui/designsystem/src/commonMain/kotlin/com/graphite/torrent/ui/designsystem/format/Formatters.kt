@@ -19,6 +19,17 @@ object Formatters {
         }
     }
 
+    /**
+     * "done of total" parts without repeating the unit: ("5,0", "8,0 ГБ"), but ("512 МБ", "8,0 ГБ").
+     * Short enough to stay on one line of a phone card.
+     */
+    fun bytesOf(done: Long, total: Long, units: UnitLabels): Pair<String, String> {
+        val d = bytes(done, units)
+        val t = bytes(total, units)
+        val sameUnit = d.substringAfterLast(' ') == t.substringAfterLast(' ')
+        return (if (sameUnit) d.substringBeforeLast(' ') else d) to t
+    }
+
     fun speed(bytesPerSecond: Long, units: UnitLabels): String = bytes(bytesPerSecond, units) + units.perSecond
 
     /** 1 decimal below 100, none above: "9,8 МБ", "123 МБ". */

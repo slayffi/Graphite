@@ -103,7 +103,7 @@ fun TorrentItem.toCardState(): TorrentCardState {
     val showSpeed = state == TorrentState.DOWNLOADING || state == TorrentState.METADATA
     val size = when {
         state == TorrentState.COMPLETED -> Formatters.bytes(wantedBytes, u)
-        wantedBytes > 0 -> stringResource(Res.string.size_of, Formatters.bytes(doneBytes, u), Formatters.bytes(wantedBytes, u))
+        wantedBytes > 0 -> Formatters.bytesOf(doneBytes, wantedBytes, u).let { (done, total) -> stringResource(Res.string.size_of, done, total) }
         else -> ""
     }
     return TorrentCardState(

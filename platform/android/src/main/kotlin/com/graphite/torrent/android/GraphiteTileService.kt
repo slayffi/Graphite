@@ -1,8 +1,6 @@
 package com.graphite.torrent.android
 
-import android.content.ComponentName
 import com.graphite.torrent.R
-import android.content.Context
 import android.graphics.drawable.Icon
 import android.os.Build
 import android.service.quicksettings.Tile
@@ -65,11 +63,5 @@ class GraphiteTileService : TileService() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) tile.subtitle = subtitle
         tile.contentDescription = getString(R.string.app_name) + ", " + subtitle
         tile.updateTile()
-    }
-
-    companion object {
-        fun refresh(context: Context) {
-            runCatching { requestListeningState(context, ComponentName(context, GraphiteTileService::class.java)) }
-        }
     }
 }

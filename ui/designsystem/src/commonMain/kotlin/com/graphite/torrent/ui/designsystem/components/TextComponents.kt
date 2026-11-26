@@ -7,23 +7,30 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.tooling.preview.Preview
 import com.graphite.torrent.ui.designsystem.theme.GraphiteTheme
 
@@ -51,30 +58,55 @@ fun MiddleEllipsisText(
     modifier: Modifier = Modifier,
     color: Color = GraphiteTheme.colors.textPrimary,
 ) {
-    val measurer = rememberTextMeasurer(cacheSize = 8)
-    BoxWithConstraints(modifier.clearAndSetSemantics { contentDescription = text }) {
-        val maxWidth = constraints.maxWidth
-        val shown = remember(text, style, maxWidth) {
-            if (maxWidth == Constraints.Infinity) {
-                text
-            } else {
-                val full = measurer.measure(text, style, maxLines = 1, softWrap = false)
-                if (full.size.width <= maxWidth) {
-                    text
+    // Measured and drawn directly: the built-in middle ellipsis is not available on every platform, and a
+    // sub-composition per row (BoxWithConstraints) is too expensive for a list that scrolls.
+    val measurer = rememberTextMeasurer(cacheSize = 2)
+    val resolved = remember(style, color) { style.copy(color = color) }
+    val fitted = remember { FittedText() }
+    var shown by remember { mutableStateOf<TextLayoutResult?>(null) }
+    Layout(
+        modifier = modifier
+            .clearAndSetSemantics { contentDescription = text }
+            .drawBehind { shown?.let { drawText(it) } },
+    ) { _, constraints ->
+        val result = fitted.fit(measurer, text, resolved, constraints.maxWidth)
+        shown = result
+        layout(result.size.width.coerceIn(constraints.minWidth, constraints.maxWidth), result.size.height.coerceIn(constraints.minHeight, constraints.maxHeight)) {}
+    }
+}
+
+/** Remembers the last fit so that scrolling and unrelated re-layouts cost nothing. */
+private class FittedText {
+    private var text: String? = null
+    private var style: TextStyle? = null
+    private var maxWidth = -1
+    private var result: TextLayoutResult? = null
+
+    fun fit(measurer: TextMeasurer, text: String, style: TextStyle, maxWidth: Int): TextLayoutResult {
+        result?.let { if (this.text == text && this.style == style && this.maxWidth == maxWidth) return it }
+        fun measure(value: String) = measurer.measure(value, style, maxLines = 1, softWrap = false)
+        var best = measure(text)
+        if (maxWidth != Constraints.Infinity && best.size.width > maxWidth) {
+            // Binary search the longest middle-ellipsized string that fits.
+            var lo = 1
+            var hi = text.length
+            best = measure(middleEllipsis(text, 1))
+            while (lo < hi) {
+                val mid = (lo + hi + 1) / 2
+                val candidate = measure(middleEllipsis(text, mid))
+                if (candidate.size.width <= maxWidth) {
+                    lo = mid
+                    best = candidate
                 } else {
-                    // Binary search the longest middle-ellipsized string that fits.
-                    var lo = 1
-                    var hi = text.length
-                    while (lo < hi) {
-                        val mid = (lo + hi + 1) / 2
-                        val w = measurer.measure(middleEllipsis(text, mid), style, maxLines = 1, softWrap = false).size.width
-                        if (w <= maxWidth) lo = mid else hi = mid - 1
-                    }
-                    middleEllipsis(text, lo)
+                    hi = mid - 1
                 }
             }
         }
-        Text(shown, style = style, color = color, maxLines = 1, softWrap = false, overflow = TextOverflow.Clip)
+        this.text = text
+        this.style = style
+        this.maxWidth = maxWidth
+        result = best
+        return best
     }
 }
 

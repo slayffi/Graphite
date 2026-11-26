@@ -60,6 +60,16 @@ data class WidgetSummary(
 ) {
     val downloading: Boolean get() = active > 0
 
+    /** Rounded to what is displayed, so a change in the last digits of the speed does not redraw the widget. */
+    fun rounded(): WidgetSummary = copy(
+        downloadRate = if (downloadRate < 1024) 0 else {
+            var step = 1L
+            while (downloadRate / step >= 100) step *= 10
+            downloadRate / step * step
+        },
+        progress = (progress * 100).toInt() / 100f,
+    )
+
     companion object {
         fun of(torrents: List<TorrentItem>, session: SessionSnapshot): WidgetSummary {
             val unfinished = torrents.filter { it.state != TorrentState.COMPLETED }

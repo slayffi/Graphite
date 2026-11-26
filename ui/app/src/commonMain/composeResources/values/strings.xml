@@ -26,6 +26,7 @@
     <string name="advice_remote_unreachable">Make sure Graphite is running on the PC and both devices are on the same network.</string>
     <string name="advice_tracker">The download continues through DHT and other peers.</string>
     <string name="advice_unknown">Details are in the event log.</string>
+    <string name="add_staged_hint">It is downloaded to the app storage first and moved to this folder when complete. Allow access to all files to download straight into it.</string>
     <string name="allow">Allow</string>
     <string name="back">Back</string>
     <string name="backup_export">Export settings and downloads</string>

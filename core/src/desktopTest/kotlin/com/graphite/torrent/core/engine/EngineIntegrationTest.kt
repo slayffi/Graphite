@@ -157,6 +157,8 @@ class EngineIntegrationTest {
 
         // Zero upload: nothing was sent to the ordinary leecher, even though it is on the "local" network.
         delay(3000)
+        // Status reaches the app through libtorrent's "what changed" alert, not only through full polls.
+        assertTrue(engine.stateUpdates > 0, "state updates received: ${engine.stateUpdates}")
         val after = engine.torrents.value.getValue(id)
         assertEquals(0L, after.uploadedPayload, "Graphite must not upload payload")
         assertEquals(0L, engine.session.value.sessionUploaded)

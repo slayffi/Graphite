@@ -27,6 +27,10 @@ data class WatchedFile(val name: String, val handle: String)
 /** Lists and consumes files of a watched folder (plain folder, or a SAF tree on Android). */
 interface WatchFolderSource {
     fun supports(location: String): Boolean
+
+    /** How often the folder is looked at. Longer where listing is expensive (Android document providers). */
+    val pollIntervalMs: Long get() = 5_000L
+
     fun list(location: String): List<WatchedFile>
     fun read(file: WatchedFile): ByteArray
     /** Renames the file to "*.added" / "*.invalid" or deletes it so it is not added twice. */
@@ -73,7 +77,7 @@ class WatchFolderService(
         job = scope.launch {
             while (isActive) {
                 runCatching { scanOnce() }
-                delay(POLL_MS)
+                delay(pollInterval())
             }
         }
     }
@@ -81,6 +85,12 @@ class WatchFolderService(
     fun stop() {
         job?.cancel()
         job = null
+    }
+
+    private suspend fun pollInterval(): Long {
+        val s = settings.current()
+        if (!s.watchFolderEnabled || s.watchFolderPath.isBlank()) return IDLE_POLL_MS
+        return sources.firstOrNull { it.supports(s.watchFolderPath) }?.pollIntervalMs ?: IDLE_POLL_MS
     }
 
     /** Returns how many torrents were added. */
@@ -111,6 +121,7 @@ class WatchFolderService(
     }
 
     private companion object {
-        const val POLL_MS = 5_000L
+        /** Switched off: only checks whether the setting was turned on. */
+        const val IDLE_POLL_MS = 5_000L
     }
 }

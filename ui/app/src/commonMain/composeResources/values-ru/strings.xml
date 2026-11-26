@@ -26,6 +26,7 @@
     <string name="advice_remote_unreachable">Убедитесь, что Graphite запущен на ПК и оба устройства в одной сети.</string>
     <string name="advice_tracker">Загрузка продолжится через DHT и других пиров.</string>
     <string name="advice_unknown">Подробности — в журнале событий.</string>
+    <string name="add_staged_hint">Сначала скачается в память приложения, а после завершения переедет в эту папку. Разрешите доступ ко всем файлам, чтобы качать сразу в неё.</string>
     <string name="allow">Разрешить</string>
     <string name="back">Назад</string>
     <string name="backup_export">Экспорт настроек и загрузок</string>

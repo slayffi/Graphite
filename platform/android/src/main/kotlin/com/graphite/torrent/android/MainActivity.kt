@@ -63,7 +63,12 @@ class MainActivity : ComponentActivity(), BridgeHost {
             }
         })
 
-        setContent { GraphiteApp(app.env, navigator, onContentShown = ::onContentShown) }
+        // The logo animation greets a fresh start only. Coming back while the app already runs (from the
+        // notification, the widget, or a link opened in the browser) goes straight to the screen.
+        val opensSomething = intent?.action in setOf(Intent.ACTION_VIEW, Intent.ACTION_SEND, Intent.ACTION_SEND_MULTIPLE)
+        val showSplash = !app.splashShown && !opensSomething && savedInstanceState == null
+        app.splashShown = true
+        setContent { GraphiteApp(app.env, navigator, showSplash = showSplash, onContentShown = ::onContentShown) }
         window.decorView.post { StartupGuard.step("first frame posted") }
         lifecycleScope.launch {
             StartupGuard.step("ui")

@@ -30,4 +30,12 @@
     <string name="crash_copied">Report copied</string>
     <string name="crash_share">Share</string>
     <string name="crash_restart">Restart</string>
+    <string name="notif_moving">Moving to your folder: %1$s</string>
+    <string name="reason_user">by you</string>
+    <string name="reason_schedule">schedule</string>
+    <string name="reason_no_wifi">no Wi-Fi</string>
+    <string name="reason_not_charging">not charging</string>
+    <string name="reason_low_battery">low battery</string>
+    <string name="reason_kill_switch">VPN is off</string>
+    <string name="reason_no_network">no network</string>
 </resources>
