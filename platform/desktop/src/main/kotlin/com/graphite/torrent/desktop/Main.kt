@@ -10,12 +10,16 @@ import com.graphite.torrent.ui.app.IncomingRequest
 import kotlinx.coroutines.launch
 import java.awt.Frame
 import java.io.File
+import java.util.concurrent.atomic.AtomicReference
 import javax.swing.UIManager
 import kotlin.system.exitProcess
 
 fun main(args: Array<String>) {
     // Native look for the folder chooser; Compose itself does not use Swing styling.
     runCatching { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()) }
+
+    // "--self-test <report file>": a normal start in a throw-away folder that reports and exits (see SelfTest).
+    val selfTest = SelfTest.fromArguments(args)?.also { it.prepare() }
 
     val instance = SingleInstance(DesktopPaths.dataDir)
     if (!instance.acquire()) {
@@ -30,8 +34,9 @@ fun main(args: Array<String>) {
         storage = FileSystemStorage(DesktopPaths.defaultDownloads.absolutePath),
         nativeExtractDir = DesktopPaths.nativeDir.absolutePath,
     )
-    var mainFrame: Frame? = null
-    val platform = DesktopPlatformServices { mainFrame }
+    // Set by the UI thread, read by others.
+    val mainFrame = AtomicReference<Frame?>()
+    val platform = DesktopPlatformServices { mainFrame.get() }
     val desktop = DesktopController(services)
     val env = AppEnvironment(
         controller = services.controller,
@@ -58,7 +63,13 @@ fun main(args: Array<String>) {
         services.remoteServer.bind()
     }
 
-    runDesktopApp(env, services, desktop, onFrame = { mainFrame = it }, onExit = { instance.release() })
+    selfTest?.watch(services) { mainFrame.get() }
+    runDesktopApp(
+        env, services, desktop,
+        onFrame = { mainFrame.set(it) },
+        onExit = { instance.release() },
+        onContentShown = { selfTest?.contentShown = true },
+    )
 }
 
 private const val SHOW_WINDOW = "--show"

@@ -76,6 +76,7 @@ fun runDesktopApp(
     desktop: DesktopController,
     onFrame: (Frame) -> Unit,
     onExit: () -> Unit,
+    onContentShown: () -> Unit = {},
 ) = application(exitProcessOnExit = true) {
     val settings by env.settings.settings.collectAsState()
     val icon = painterResource(DsRes.drawable.app_icon)
@@ -151,7 +152,7 @@ fun runDesktopApp(
             WindowsTheme.apply(window, colors.bg.toArgb(), colors.textPrimary.toArgb(), colors.border.toArgb())
         }
         DropArea(env) {
-            GraphiteApp(env)
+            GraphiteApp(env, onContentShown = onContentShown)
         }
     }
 

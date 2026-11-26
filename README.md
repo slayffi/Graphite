@@ -7,7 +7,7 @@
 
 <p align="center"><img src="docs/images/details.png" width="880" alt="Список загрузок и подробности"></p>
 
-<p align="center"><b><a href="../../releases/latest">Скачать последнюю версию</a></b> — APK для Android 8.0+ и MSI для Windows 10 / 11</p>
+<p align="center"><b><a href="../../releases/latest">Скачать последнюю версию</a></b> — APK для Android 8.0+ и установщик для Windows 10 / 11</p>
 
 ## Возможности
 
@@ -22,7 +22,7 @@
 **Дополнительно.** Стриминг с последовательной загрузкой и встроенным плеером (libVLC на Windows, Media3 на Android); управление ПК с телефона в локальной сети (пара по QR, AES-256-GCM); планировщик; RSS с фильтрами; шифрование протокола, SOCKS5/HTTP-прокси, привязка к интерфейсу VPN с kill switch, IP-фильтр; действия после завершения (уведомление, звук, сон, выключение, выход); график скорости и статистика за день / неделю / месяц; журнал событий с понятными ошибками и советами; экспорт и импорт настроек и загрузок.
 
 **Android:** foreground-сервис с прогрессом и кнопками, только Wi-Fi / только при зарядке / пауза при низком заряде, виджет, плитка быстрых настроек, Storage Access Framework.
-**Windows:** MSI-установщик, трей, автозапуск, ассоциации `.torrent` и `magnet:`, мини-окно поверх всех, глобальные горячие клавиши, прогресс на панели задач, тёмный заголовок окна.
+**Windows:** установщик (`.exe` и `.msi`), трей, автозапуск, ассоциации `.torrent` и `magnet:`, мини-окно поверх всех, глобальные горячие клавиши, прогресс на панели задач, тёмный заголовок окна.
 
 | | | |
 |---|---|---|
@@ -37,7 +37,7 @@
 |---|---|
 | JDK | 21 (Temurin или любой другой) |
 | Android SDK | platform 37 и build-tools Gradle (AGP) докачивает сам, если лицензии SDK приняты |
-| Windows (только для MSI) | Windows 10/11 x64; WiX Toolset Compose Multiplatform скачивает сам |
+| Windows (только для установщиков) | Windows 10/11 x64; WiX Toolset Compose Multiplatform скачивает сам |
 | Gradle | через `./gradlew` (9.9.2) |
 
 Все версии библиотек — в [`gradle/libs.versions.toml`](gradle/libs.versions.toml).
@@ -56,16 +56,19 @@
 # Запуск desktop-версии из исходников (Windows, Linux; macOS не проверялся)
 ./gradlew :platform:desktop:run
 
-# MSI (только на Windows)
-./gradlew :platform:desktop:packageMsi
+# Установщики (только на Windows): .exe и .msi с одним и тем же содержимым
+./gradlew :platform:desktop:packageExe :platform:desktop:packageMsi
+#   → platform/desktop/build/compose/binaries/main/exe/Graphite-1.0.0.exe
 #   → platform/desktop/build/compose/binaries/main/msi/Graphite-1.0.0.msi
 ```
 
 **Подпись релизного APK.** Задайте переменные окружения `GRAPHITE_KEYSTORE_FILE`, `GRAPHITE_KEYSTORE_PASSWORD`, `GRAPHITE_KEY_ALIAS`, `GRAPHITE_KEY_PASSWORD`. Без них релизный APK подписывается отладочным ключом (годится для проверки, не для публикации).
 
-**libVLC для MSI.** Встроенный плеер ищет libVLC сначала внутри установленного приложения, затем в установленном VLC. Чтобы положить его в MSI, перед `packageMsi` распакуйте [VLC 3.0.x win64 zip](https://download.videolan.org/pub/videolan/vlc/) и скопируйте `libvlc.dll`, `libvlccore.dll`, `COPYING.txt` и папку `plugins` в `platform/desktop/resources/windows/vlc/` (папка в `.gitignore`). CI делает это сам. Без libVLC приложение работает, плеер предлагает открыть поток во внешнем приложении.
+**libVLC в установщике.** Встроенный плеер ищет libVLC сначала внутри установленного приложения, затем в установленном VLC. Чтобы положить его в установщик, перед сборкой распакуйте [VLC 3.0.x win64 zip](https://download.videolan.org/pub/videolan/vlc/) и скопируйте `libvlc.dll`, `libvlccore.dll`, `COPYING.txt` и папку `plugins` в `platform/desktop/resources/windows/vlc/` (папка в `.gitignore`). CI делает это сам. Без libVLC приложение работает, плеер предлагает открыть поток во внешнем приложении.
 
 **Linux.** libtorrent4j подменяет обработчик SIGSEGV, поэтому JVM на Linux запускается с `LD_PRELOAD=$JAVA_HOME/lib/libjsig.so` — Gradle-задачи `run` и `test` делают это автоматически. На Windows (целевая платформа) это не нужно.
+
+**Проверка запуска на Windows.** `Graphite.exe --self-test отчёт.txt` — обычный запуск во временной папке данных (ваши загрузки и настройки не затрагиваются): приложение открывает окно, рисует интерфейс, запускает движок, ищет libVLC, пишет отчёт и выходит с кодом 0 или 1. CI ставит собранный `.exe` на чистую Windows и запускает эту проверку: пакет может быть сломан так, как не покажет ни один тест кода (в упакованной Java не хватает модуля, не грузится нативная библиотека).
 
 **Проверка запуска на Android.** `tools/android_smoke_test.sh <apk>` ставит APK на подключённый эмулятор или телефон, запускает Graphite и проверяет, что процесс жив, первый экран показан и в журнале нет падений. Запускайте её на **релизном** APK: ошибки R8 и падения в инициализаторах библиотек не видны в JVM-тестах (так однажды уже было: старый WorkManager, который тянет Glance, падал в релизе до старта приложения).
 
@@ -75,7 +78,7 @@
 2. Напишите описание в `docs/releases/v<версия>.md`.
 3. Отправьте тег `v<версия>` — или запустите workflow **Build** вручную с `release: publish` (`draft` создаёт черновик, который видят только участники репозитория; его публикует workflow **Publish draft release**).
 
-CI прогоняет тесты, собирает APK и MSI, запускает релизный APK на эмуляторе и только потом создаёт релиз: файлы, `SHA256SUMS.txt` и отпечаток сертификата подписи. Опубликованный релиз не перезаписывается — для нового поднимите версию.
+CI прогоняет тесты, собирает APK и установщики Windows, запускает релизный APK на эмуляторе, ставит `.exe` на чистую Windows и запускает установленное приложение, и только потом создаёт релиз: файлы, `SHA256SUMS.txt` и отпечаток сертификата подписи. Опубликованный релиз не перезаписывается — для нового поднимите версию. Режим `release: add-files` только добавляет в опубликованный релиз этой версии файлы, которых в нём ещё нет (так в 1.0.0 появился `.exe`).
 
 **Ключ подписи Android.** Android ставит обновление поверх, только если оно подписано тем же ключом. Поэтому ключ нужен один на всё время жизни приложения, и хранить его надо в секретах репозитория (Settings → Secrets and variables → Actions):
 
@@ -90,7 +93,7 @@ CI прогоняет тесты, собирает APK и MSI, запускае�
 
 ### CI
 
-[`.github/workflows/build.yml`](.github/workflows/build.yml) на каждый коммит: тесты на Ubuntu, APK на Ubuntu, запуск релизного APK на эмуляторе Android 14 (если приложение не стартует, задача падает; на раннерах без аппаратного ускорения проверка пропускается с предупреждением), MSI на Windows (с libVLC). Артефакты: `graphite-android`, `graphite-windows`, `test-reports`. Для подписанного релиза добавьте секреты `GRAPHITE_KEYSTORE_BASE64`, `GRAPHITE_KEYSTORE_PASSWORD`, `GRAPHITE_KEY_ALIAS`, `GRAPHITE_KEY_PASSWORD`.
+[`.github/workflows/build.yml`](.github/workflows/build.yml) на каждый коммит: тесты на Ubuntu, APK на Ubuntu, запуск релизного APK на эмуляторе Android 14 (если приложение не стартует, задача падает; на раннерах без аппаратного ускорения проверка пропускается с предупреждением), установщики `.exe` и `.msi` на Windows (с libVLC), установка `.exe` и запуск установленного приложения с самопроверкой. Артефакты: `graphite-android`, `graphite-windows`, `test-reports`. Для подписанного релиза добавьте секреты `GRAPHITE_KEYSTORE_BASE64`, `GRAPHITE_KEYSTORE_PASSWORD`, `GRAPHITE_KEY_ALIAS`, `GRAPHITE_KEY_PASSWORD`.
 
 ## Архитектура
 

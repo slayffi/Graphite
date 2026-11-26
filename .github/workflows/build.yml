@@ -11,7 +11,8 @@ on:
       release:
         description: 'GitHub release from this commit'
         type: choice
-        options: ['no', 'draft', 'publish']
+        # add-files: upload what a published release of this version does not have yet; nothing is replaced
+        options: ['no', 'draft', 'publish', 'add-files']
         default: 'no'
       temporary_key:
         description: 'Allow APKs signed with a throw-away key (they cannot be updated later)'
@@ -157,7 +158,7 @@ jobs:
           retention-days: 14
 
   windows:
-    name: Windows MSI
+    name: Windows installers
     runs-on: windows-latest
     timeout-minutes: 50
     steps:
@@ -190,12 +191,44 @@ jobs:
           Copy-Item "$($src.FullName)\plugins" $dst -Recurse
           # Interfaces, skins and Lua scripts are not used by an embedded player.
           Remove-Item "$dst\plugins\gui", "$dst\plugins\lua" -Recurse -Force -ErrorAction SilentlyContinue
-      - name: Build MSI
-        run: ./gradlew.bat :platform:desktop:packageMsi
+      - name: Build the installers (.exe and .msi)
+        run: ./gradlew.bat :platform:desktop:packageExe :platform:desktop:packageMsi
+      # The package is installed and started for real: a Java module missing from the bundled runtime or a
+      # native library that does not load on a clean Windows shows up only here.
+      - name: Install with the .exe and start Graphite
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem platform\desktop\build\compose\binaries\main\exe\*.exe | Select-Object -First 1
+          if (-not $installer) { throw "The .exe installer was not built" }
+          Write-Host "Installing $($installer.Name) ($([math]::Round($installer.Length / 1MB)) MB)"
+          $log = "$env:RUNNER_TEMP\install.log"
+          $setup = Start-Process $installer.FullName -ArgumentList '/qn', '/norestart', '/l*v', "`"$log`"" -PassThru
+          $null = $setup.Handle   # without this PowerShell forgets the exit code of a process it did not wait for
+          if (-not $setup.WaitForExit(600000)) { $setup.Kill(); throw "The installer did not finish in 10 minutes (it must work without questions with /qn)" }
+          if ($setup.ExitCode -ne 0) {
+            if (Test-Path $log) { Get-Content $log -Tail 60 }
+            throw "The installer failed with code $($setup.ExitCode)"
+          }
+          $app = @("$env:LOCALAPPDATA\Graphite\Graphite.exe", "$env:ProgramFiles\Graphite\Graphite.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $app) { throw "Graphite.exe was not installed" }
+          Write-Host "Installed: $app"
+
+          $report = "$env:RUNNER_TEMP\self-test.txt"
+          $run = Start-Process $app -ArgumentList '--self-test', "`"$report`"" -PassThru
+          $null = $run.Handle
+          $finished = $run.WaitForExit(240000)
+          if (Test-Path $report) { Get-Content $report } else { Write-Host "No self-test report was written" }
+          if (-not $finished) { $run.Kill(); throw "Graphite did not finish its self-test in 4 minutes" }
+          if ($run.ExitCode -ne 0) { throw "Graphite self-test failed with code $($run.ExitCode)" }
+          $text = Get-Content $report -Raw
+          if ($text -notmatch 'RESULT: PASSED') { throw "The self-test did not pass" }
+          if ($text -notmatch 'libVLC found') { throw "The bundled player (libVLC) was not found by the installed app" }
       - uses: actions/upload-artifact@v4
         with:
           name: graphite-windows
-          path: platform/desktop/build/compose/binaries/main/msi/*.msi
+          path: |
+            platform/desktop/build/compose/binaries/main/exe/*.exe
+            platform/desktop/build/compose/binaries/main/msi/*.msi
           retention-days: 30
 
   # Publishes what the jobs above built and checked; nothing is built here.

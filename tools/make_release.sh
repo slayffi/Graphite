@@ -2,7 +2,8 @@
 # Creates the GitHub release for the version written in the build files. Runs in CI after the tests, the
 # builds and the Android start-up check: it only collects what they produced.
 #
-#   MODE=draft|publish            (a tag push always publishes)
+#   MODE=draft|publish|add-files  (a tag push always publishes; add-files uploads what a published release
+#                                 of this version does not have yet and replaces nothing)
 #   HAS_KEY=true|false            the APKs were signed with the release key from the repository secrets
 #   TEMPORARY_KEY_OK=true|false   allow a release signed with CI's throw-away debug key
 #   dist/android, dist/windows    the build artifacts
@@ -25,9 +26,11 @@ NOTES="docs/releases/$TAG.md"
 
 # An APK signed with a key that exists only on this runner can never be updated: Android refuses a newer
 # build signed with another key. Such a release has to be asked for explicitly.
-if [ "${HAS_KEY:-false}" != "true" ] && [ "${TEMPORARY_KEY_OK:-false}" != "true" ]; then
-  fail "No signing key: add the secrets GRAPHITE_KEYSTORE_BASE64, GRAPHITE_KEYSTORE_PASSWORD, GRAPHITE_KEY_ALIAS and GRAPHITE_KEY_PASSWORD (see README), or run the workflow with 'temporary_key'."
-fi
+require_key() {
+  if [ "${HAS_KEY:-false}" != "true" ] && [ "${TEMPORARY_KEY_OK:-false}" != "true" ]; then
+    fail "No signing key: add the secrets GRAPHITE_KEYSTORE_BASE64, GRAPHITE_KEYSTORE_PASSWORD, GRAPHITE_KEY_ALIAS and GRAPHITE_KEY_PASSWORD (see README), or run the workflow with 'temporary_key'."
+  fi
+}
 
 OUT=release-out
 mkdir -p "$OUT"
@@ -36,9 +39,46 @@ for abi in arm64-v8a armeabi-v7a x86_64 universal; do
   [ -f "$src" ] || fail "Missing $src"
   cp "$src" "$OUT/Graphite-$VERSION-android-$abi.apk"
 done
-msi=$(ls dist/windows/*.msi 2>/dev/null | head -1)
-[ -n "$msi" ] || fail "Missing the MSI"
-cp "$msi" "$OUT/Graphite-$VERSION-windows-x64.msi"
+for kind in exe msi; do
+  src=$(find dist/windows -name "*.$kind" | head -1)
+  [ -n "$src" ] || fail "Missing the .$kind installer"
+  cp "$src" "$OUT/Graphite-$VERSION-windows-x64.$kind"
+done
+
+# --- Adding files to a release that is already out -------------------------------------------------------
+# What people may have downloaded is never replaced: only names the release does not have are uploaded.
+if [ "$MODE" = "add-files" ]; then
+  release=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG") || fail "There is no published release $TAG to add files to"
+  present=$(jq -r '.assets[].name' <<< "$release")
+  added=()
+  for file in "$OUT"/Graphite-*; do
+    grep -qxF "$(basename "$file")" <<< "$present" || added+=("$file")
+  done
+  if [ ${#added[@]} -eq 0 ]; then
+    echo "Release $TAG already has every file; nothing to add"
+    exit 0
+  fi
+  for file in "${added[@]}"; do [[ "$file" != *.apk ]] || require_key; done
+  gh release download "$TAG" --pattern SHA256SUMS.txt --output sums.txt
+  for file in "${added[@]}"; do
+    gh release upload "$TAG" "$file"
+    (cd "$OUT" && sha256sum "$(basename "$file")") >> sums.txt
+    echo "Added $(basename "$file")"
+  done
+  sort -k2 sums.txt > "$OUT/SHA256SUMS.txt"
+  gh release upload "$TAG" "$OUT/SHA256SUMS.txt" --clobber
+  # The text is refreshed; the part about checking the files describes the APKs that stay, so it is kept.
+  {
+    cat "$NOTES"
+    echo
+    jq -r '.body' <<< "$release" | tr -d '\r' | awk '/^## Проверка файлов/ { keep = 1 } keep'
+  } > release-notes.md
+  gh release edit "$TAG" --notes-file release-notes.md
+  echo "Release $TAG updated"
+  exit 0
+fi
+
+require_key
 (cd "$OUT" && sha256sum Graphite-* > SHA256SUMS.txt)
 
 # Who signed the APKs: lets anyone check that an update comes from the same publisher.

@@ -8,8 +8,14 @@ object DesktopPaths {
     val isWindows: Boolean = os.contains("win")
     val isMac: Boolean = os.contains("mac")
 
+    /**
+     * Another place for everything the app stores (the self-test uses a throw-away folder). Has to be set
+     * before the first use of the paths below.
+     */
+    @Volatile var dataRoot: File? = null
+
     val dataDir: File by lazy {
-        val dir = when {
+        val dir = dataRoot ?: when {
             isWindows -> File(System.getenv("LOCALAPPDATA") ?: (System.getProperty("user.home") + "\\AppData\\Local"), "Graphite")
             isMac -> File(System.getProperty("user.home"), "Library/Application Support/Graphite")
             else -> File(System.getenv("XDG_DATA_HOME") ?: (System.getProperty("user.home") + "/.local/share"), "graphite")
@@ -19,7 +25,7 @@ object DesktopPaths {
     }
 
     val defaultDownloads: File by lazy {
-        File(File(System.getProperty("user.home"), "Downloads"), "Graphite").apply { mkdirs() }
+        (dataRoot?.let { File(it, "downloads") } ?: File(File(System.getProperty("user.home"), "Downloads"), "Graphite")).apply { mkdirs() }
     }
 
     val nativeDir: File get() = File(dataDir, "native")

@@ -39,7 +39,8 @@ compose.desktop {
         jvmArgs += listOf("-Xmx768m", "-Dfile.encoding=UTF-8", "-Dgraphite.version=$appVersion")
 
         nativeDistributions {
-            targetFormats(TargetFormat.Msi)
+            // Two installers with the same content: .exe is what people expect, .msi suits silent deployment.
+            targetFormats(TargetFormat.Msi, TargetFormat.Exe)
             packageName = "Graphite"
             packageVersion = appVersion
             description = "Graphite — fast torrent client"
