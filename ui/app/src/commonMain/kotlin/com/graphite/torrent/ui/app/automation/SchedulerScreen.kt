@@ -112,9 +112,10 @@ fun SchedulerScreen(env: AppEnvironment, scheduler: SchedulerService, onBack: ()
             }
             if (settings.schedulerEnabled) {
                 item {
+                    val kbps = GraphiteTheme.units.kilobytesPerSecond
                     val now = buildList {
                         if (decision.pause) add(stringResource(Res.string.sched_action_pause))
-                        decision.downloadLimitKbps?.let { add("↓ $it KB/s") }
+                        decision.downloadLimitKbps?.let { add("↓ $it " + kbps) }
                         decision.profile?.let { add(profileName(it)) }
                     }
                     Text(

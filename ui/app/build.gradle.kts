@@ -41,6 +41,8 @@ kotlin {
             dependencies {
                 implementation(compose.desktop.currentOs)
                 implementation(libs.compose.ui.test)
+                implementation(project(":testing"))
+                implementation(libs.kotlinx.coroutines.swing)
                 implementation(libs.sqldelight.sqlite.driver)
                 runtimeOnly(libs.libtorrent4j.linux)
                 runtimeOnly(libs.libtorrent4j.windows)

@@ -1,4 +1,4 @@
-package com.graphite.torrent.data
+package com.graphite.torrent.testing
 
 import com.graphite.torrent.core.engine.EngineConfig
 import com.graphite.torrent.core.engine.EngineEvent
@@ -26,7 +26,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 
-/** In-memory engine for data layer tests. */
+/** In-memory [TorrentEngine] for data and UI tests: no network, no native library. */
 class FakeTorrentEngine : TorrentEngine {
     val state = MutableStateFlow<Map<String, TorrentItem>>(emptyMap())
     val sessionState = MutableStateFlow(SessionSnapshot(running = true))

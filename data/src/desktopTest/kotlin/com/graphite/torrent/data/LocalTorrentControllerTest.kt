@@ -1,10 +1,13 @@
 package com.graphite.torrent.data
 
+import com.graphite.torrent.testing.FakeTorrentEngine
 import com.graphite.torrent.core.controller.ControllerNotice
 import com.graphite.torrent.core.model.AddRequest
 import com.graphite.torrent.core.model.AddSource
 import com.graphite.torrent.core.model.ErrorKind
 import com.graphite.torrent.core.model.FileEntry
+import com.graphite.torrent.core.model.FilePriority
+import com.graphite.torrent.core.model.MetaFile
 import com.graphite.torrent.core.model.GraphiteException
 import com.graphite.torrent.core.model.HistoryEvent
 import com.graphite.torrent.core.model.PauseReason
@@ -152,4 +155,38 @@ class LocalTorrentControllerTest {
 
     private fun CoroutineScope.launchCollect(c: LocalTorrentController, sink: MutableList<ControllerNotice>) =
         launch { c.notices.collect { synchronized(sink) { sink += it } } }
+
+    @Test
+    fun unavailableFolderIsReportedBeforeTheEngineIsTouched() = runBlocking {
+        val c = controller()
+        c.start()
+        // A path below a regular file can never become a folder (same as a removed drive or a read-only mount).
+        val blocker = File(dir, "not-a-folder").apply { writeText("x") }
+        val e = assertFailsWith<GraphiteException> {
+            c.add(AddRequest(AddSource.Magnet(magnet), savePath = File(blocker, "sub").absolutePath))
+        }
+        assertEquals(ErrorKind.FOLDER_UNAVAILABLE, e.error.kind)
+        assertTrue(engine.state.value.isEmpty(), "nothing was added")
+        c.stop()
+    }
+
+    @Test
+    fun notEnoughSpaceCountsOnlySelectedFiles() = runBlocking {
+        val tinyDisk = object : FileSystemStorage(File(dir, "downloads").absolutePath) {
+            override fun freeSpace(path: String) = 600L
+        }
+        val c = controller(tinyDisk)
+        c.start()
+        val meta = engine.metadata("big", "e".repeat(40)).let {
+            it.copy(totalSize = 1000, files = listOf(MetaFile(0, "big/a.bin", 500), MetaFile(1, "big/b.bin", 500)))
+        }
+        val e = assertFailsWith<GraphiteException> { c.add(AddRequest(AddSource.Preview(meta))) }
+        assertEquals(ErrorKind.NO_SPACE, e.error.kind)
+        assertTrue(engine.state.value.isEmpty())
+
+        // Skipping one file makes it fit.
+        val id = c.add(AddRequest(AddSource.Preview(meta), filePriorities = mapOf(1 to FilePriority.SKIP)))
+        assertTrue(id in engine.state.value)
+        c.stop()
+    }
 }

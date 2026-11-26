@@ -1,5 +1,6 @@
 package com.graphite.torrent.data
 
+import com.graphite.torrent.testing.FakeTorrentEngine
 import com.graphite.torrent.core.model.Category
 import com.graphite.torrent.core.model.RssRule
 import com.graphite.torrent.core.model.ScheduleAction

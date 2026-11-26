@@ -343,6 +343,7 @@ class LocalTorrentController(
     override suspend fun add(request: AddRequest): String {
         val settings = settingsRepository.current()
         val savePath = storage.resolveSavePath(request.savePath.orEmpty(), settings)
+        checkDestination(request, savePath)
         val extra = if (settings.addPublicTrackers) settings.trackerList else emptyList()
         val id = engine.add(
             request.copy(startPaused = request.startPaused || settings.startPaused),
@@ -367,6 +368,18 @@ class LocalTorrentController(
         eventLog.log(EventType.TORRENT_ADDED, name, savePath, id)
         _notices.tryEmit(ControllerNotice.Added(id, name))
         return id
+    }
+
+    /** Fails early with a clear message instead of a disk error from libtorrent minutes later. */
+    private suspend fun checkDestination(request: AddRequest, savePath: String) = withContext(Dispatchers.IO) {
+        storage.ensureWritable(savePath)
+        val metadata = (request.source as? AddSource.Preview)?.metadata ?: return@withContext
+        val priorities = request.filePriorities.orEmpty()
+        val needed = metadata.files.filter { priorities[it.index] != FilePriority.SKIP }.sumOf { it.size }
+        val free = storage.freeSpace(savePath)
+        if (needed > 0 && free in 0 until needed) {
+            throw GraphiteException(ErrorKind.NO_SPACE, "needs $needed bytes, $free free in $savePath")
+        }
     }
 
     private inline fun forLive(ids: Collection<String>, action: (String) -> Unit) {

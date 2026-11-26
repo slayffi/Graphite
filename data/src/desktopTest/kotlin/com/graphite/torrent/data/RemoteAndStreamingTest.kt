@@ -1,5 +1,6 @@
 package com.graphite.torrent.data
 
+import com.graphite.torrent.testing.FakeTorrentEngine
 import com.graphite.torrent.core.engine.EngineConfig
 import com.graphite.torrent.core.engine.FileResumeStore
 import com.graphite.torrent.core.engine.LibtorrentEngine

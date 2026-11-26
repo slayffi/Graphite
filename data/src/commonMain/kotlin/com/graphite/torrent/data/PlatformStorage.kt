@@ -1,6 +1,8 @@
 package com.graphite.torrent.data
 
+import com.graphite.torrent.core.model.ErrorKind
 import com.graphite.torrent.core.model.FileEntry
+import com.graphite.torrent.core.model.GraphiteException
 import com.graphite.torrent.core.model.TorrentItem
 import com.graphite.torrent.core.settings.AppSettings
 import java.io.File
@@ -33,6 +35,21 @@ interface PlatformStorage {
         var f: File? = File(path)
         while (f != null && !f.exists()) f = f.parentFile
         return f?.usableSpace ?: 0L
+    }
+
+    /**
+     * Makes sure libtorrent can write into [path] (creating it when needed) before a download is added.
+     * Throws [ErrorKind.FOLDER_UNAVAILABLE] for missing drives, read-only folders and paths that point to a file.
+     */
+    fun ensureWritable(path: String) {
+        val dir = File(path)
+        if (!dir.isDirectory && !dir.mkdirs()) throw GraphiteException(ErrorKind.FOLDER_UNAVAILABLE, path)
+        // canWrite() is unreliable for folders on Windows: probe with a real file.
+        try {
+            File.createTempFile(".graphite", ".probe", dir).delete()
+        } catch (e: Exception) {
+            throw GraphiteException(ErrorKind.FOLDER_UNAVAILABLE, path, e)
+        }
     }
 
     /** Called once when a torrent completes for the first time. */

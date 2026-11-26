@@ -43,6 +43,7 @@ kotlin {
         }
         val desktopTest by getting {
             dependencies {
+                implementation(project(":testing"))
                 implementation(libs.sqldelight.sqlite.driver)
                 runtimeOnly(libs.libtorrent4j.linux)
                 runtimeOnly(libs.libtorrent4j.windows)

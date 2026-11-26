@@ -1,0 +1,19 @@
+Graphite includes or links the following third-party software.
+
+libtorrent (https://libtorrent.org) ............................ BSD-3-Clause
+libtorrent4j (https://github.com/aldenml/libtorrent4j) ......... MIT
+Kotlin, kotlinx.coroutines, kotlinx.serialization .............. Apache-2.0
+Compose Multiplatform, Jetpack Compose, AndroidX
+  (incl. Media3, Glance, DataStore, CameraX) .................. Apache-2.0
+SQLDelight, sqlite-jdbc ........................................ Apache-2.0
+Okio ........................................................... Apache-2.0
+ZXing .......................................................... Apache-2.0
+JNA ............................................................ Apache-2.0 OR LGPL-2.1
+Inter typeface ................................................. SIL Open Font License 1.1 (licenses/Inter-OFL.txt)
+JetBrains Mono typeface ........................................ SIL Open Font License 1.1 (licenses/JetBrainsMono-OFL.txt)
+Lucide icons ................................................... ISC (licenses/Lucide-ISC.txt)
+
+Windows installer only:
+libVLC / VLC media player components (https://www.videolan.org) . LGPL-2.1-or-later for libvlc and libvlccore;
+  individual plugins may be under GPL-2.0-or-later. The license text ships as vlc/COPYING.txt.
+  Source code: https://code.videolan.org/videolan/vlc

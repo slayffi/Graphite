@@ -141,14 +141,14 @@ fun SettingsScreen(
             )
         }
     }
-    numberEntry(entries, Res.string.group_speed, stringResource(Res.string.set_download_limit), stringResource(Res.string.set_download_limit_desc), s.downloadLimitKbps, "KB/s") { v -> upd { it.copy(downloadLimitKbps = v) } }
+    numberEntry(entries, Res.string.group_speed, stringResource(Res.string.set_download_limit), stringResource(Res.string.set_download_limit_desc), s.downloadLimitKbps, GraphiteTheme.units.kilobytesPerSecond) { v -> upd { it.copy(downloadLimitKbps = v) } }
     numberEntry(entries, Res.string.group_speed, stringResource(Res.string.set_active_downloads), stringResource(Res.string.set_auto_hint), s.maxActiveDownloads, "") { v -> upd { it.copy(maxActiveDownloads = v) } }
     numberEntry(entries, Res.string.group_speed, stringResource(Res.string.set_connections), stringResource(Res.string.set_auto_hint), s.connectionsLimit, "") { v -> upd { it.copy(connectionsLimit = v) } }
 
     // ---------------------------------------------------------------- Upload
     switchEntry(entries, Res.string.group_upload, stringResource(Res.string.set_zero_upload), stringResource(Res.string.set_zero_upload_desc), s.zeroUpload, GraphiteIcons.ShieldCheck) { v -> upd { it.copy(zeroUpload = v) } }
     if (!s.zeroUpload) {
-        numberEntry(entries, Res.string.group_upload, stringResource(Res.string.set_upload_limit), stringResource(Res.string.set_download_limit_desc), s.uploadLimitKbps, "KB/s") { v -> upd { it.copy(uploadLimitKbps = v) } }
+        numberEntry(entries, Res.string.group_upload, stringResource(Res.string.set_upload_limit), stringResource(Res.string.set_download_limit_desc), s.uploadLimitKbps, GraphiteTheme.units.kilobytesPerSecond) { v -> upd { it.copy(uploadLimitKbps = v) } }
     }
 
     // ---------------------------------------------------------------- Downloads

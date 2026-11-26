@@ -18,6 +18,9 @@ data class UnitLabels(
     val decimalSeparator: Char,
     val infinity: String = "∞",
 ) {
+    /** Unit of speed limits entered by the user ("KB/s", "КБ/с"). */
+    val kilobytesPerSecond: String get() = kilobytes + perSecond
+
     companion object {
         val English = UnitLabels("B", "KB", "MB", "GB", "TB", "/s", "s", "m", "h", "d", '.')
         val Russian = UnitLabels("Б", "КБ", "МБ", "ГБ", "ТБ", "/с", "с", "м", "ч", "д", ',')
