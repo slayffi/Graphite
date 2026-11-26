@@ -37,7 +37,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -104,10 +106,11 @@ fun GraphiteApp(
     val settings by env.settings.settings.collectAsStateWithLifecycle()
     GraphiteTheme(amoled = settings.amoledBlack, reduceMotion = settings.reduceMotion, units = currentUnitLabels()) {
         ProvideViewModelStore {
+            val screenStores = remember { ScreenStores() }
             var splashDone by remember { mutableStateOf(!showSplash) }
             LaunchedEffect(splashDone) { if (splashDone) onContentShown() }
             Box(Modifier.fillMaxSize().background(GraphiteTheme.colors.bg)) {
-                CompositionLocalProvider(LocalErrorHandler provides env.errorHandler) {
+                CompositionLocalProvider(LocalErrorHandler provides env.errorHandler, LocalScreenStores provides screenStores) {
                     AppContent(env, navigator, extraScreens)
                 }
                 AnimatedVisibility(!splashDone, enter = fadeIn(), exit = fadeOut(tween(GraphiteTheme.motion.duration(300)))) {
@@ -135,19 +138,25 @@ private fun ProvideViewModelStore(content: @Composable () -> Unit) {
 }
 
 /**
- * View models of one screen instance: created with it and cleared when it leaves, so that a closed details
- * page does not keep asking the engine about its torrent for as long as the app runs.
+ * View models of the screens in the back stack. A details page keeps its state while it can be returned to
+ * (for example from the player) and is cleared when it is closed - it must not keep asking the engine about
+ * its torrent for as long as the app runs.
  */
-@Composable
-private fun rememberScreenStore(key: Any): ViewModelStoreOwner {
-    val owner = remember(key) {
+private class ScreenStores {
+    private val owners = HashMap<String, ViewModelStoreOwner>()
+
+    fun owner(key: String): ViewModelStoreOwner = owners.getOrPut(key) {
         object : ViewModelStoreOwner {
             override val viewModelStore: ViewModelStore = ViewModelStore()
         }
     }
-    DisposableEffect(owner) { onDispose { owner.viewModelStore.clear() } }
-    return owner
+
+    fun retain(keys: Set<String>) {
+        owners.keys.filter { it !in keys }.forEach { owners.remove(it)?.viewModelStore?.clear() }
+    }
 }
+
+private val LocalScreenStores = staticCompositionLocalOf { ScreenStores() }
 
 @Composable
 private fun AppContent(
@@ -159,6 +168,10 @@ private fun AppContent(
     val scope = rememberAppScope()
     val addViewModel = viewModel { AddViewModel(env) }
     val downloadsViewModel = viewModel { DownloadsViewModel(env) }
+    val screenStores = LocalScreenStores.current
+    val openDetails = navigator.openDestinations().filterIsInstance<Destination.Details>().mapTo(HashSet()) { it.id }
+    SideEffect { screenStores.retain(openDetails) }
+    DisposableEffect(screenStores) { onDispose { screenStores.retain(emptySet()) } }
     var showAdd by remember { mutableStateOf(false) }
     var sidebarExpanded by remember { mutableStateOf(false) }
     val settings by env.settings.settings.collectAsStateWithLifecycle()
@@ -334,6 +347,8 @@ private fun DownloadsPane(
     onShowMessage: (String) -> Unit,
 ) {
     val details = navigator.current as? Destination.Details
+    val stores = LocalScreenStores.current
+    val detailsStore = remember(details?.id) { details?.let { stores.owner(it.id) } } ?: LocalViewModelStoreOwner.current!!
     val onPlay: (String, Int, String) -> Unit = { id, index, title -> navigator.navigate(Destination.Player(id, index, title)) }
     if (twoPane) {
         Row(Modifier.fillMaxSize()) {
@@ -349,7 +364,7 @@ private fun DownloadsPane(
             Box(Modifier.weight(1f).fillMaxHeight()) {
                 if (details != null) {
                     DetailsScreen(
-                        viewModel(rememberScreenStore(details.id)) { DetailsViewModel(env, details.id) },
+                        viewModel(detailsStore) { DetailsViewModel(env, details.id) },
                         onBack = null,
                         onShowMessage = onShowMessage,
                         onPlay = { index, title -> onPlay(details.id, index, title) },
@@ -361,7 +376,7 @@ private fun DownloadsPane(
         }
     } else if (details != null) {
         DetailsScreen(
-            viewModel(rememberScreenStore(details.id)) { DetailsViewModel(env, details.id) },
+            viewModel(detailsStore) { DetailsViewModel(env, details.id) },
             onBack = { navigator.back() },
             onShowMessage = onShowMessage,
             onPlay = { index, title -> onPlay(details.id, index, title) },

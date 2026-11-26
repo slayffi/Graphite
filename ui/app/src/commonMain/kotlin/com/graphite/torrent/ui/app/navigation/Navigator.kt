@@ -30,6 +30,9 @@ class Navigator {
     val stack: List<Destination> get() = stacks.getValue(tab)
     val current: Destination? get() = stack.lastOrNull()
 
+    /** Every screen that can still be returned to, in all tabs. */
+    fun openDestinations(): List<Destination> = stacks.values.flatten()
+
     fun selectTab(newTab: RootTab) {
         if (newTab == tab) stacks.getValue(tab).clear() else tab = newTab
     }

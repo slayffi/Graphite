@@ -22,6 +22,9 @@ import com.graphite.torrent.core.model.TorrentState
 import com.graphite.torrent.data.BackgroundPolicy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
@@ -54,6 +57,11 @@ class TorrentService : LifecycleService() {
         instance = this
         // Off the main thread: formatting and posting the notification must never delay the UI.
         lifecycleScope.launch(Dispatchers.Default) { updateLoop(content) }
+        // A pause begins or ends (Wi-Fi is back, the charger is plugged in, the schedule allows): the phone may
+        // be falling asleep again this very moment, so stay awake long enough for the loop to see it.
+        lifecycleScope.launch(Dispatchers.Default) {
+            controller.session.map { it.pauseReasons }.distinctUntilChanged().drop(1).collect { beginProbe() }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -115,11 +123,16 @@ class TorrentService : LifecycleService() {
         }
     }
 
-    /** The alarm fired: stay awake for a short while and let the loop decide whether it is worth more. */
+    /** Stay awake for a short while and let the loop decide whether it is worth more. */
     private fun beginProbe() {
-        probeScheduled = false
         probeUntil = SystemClock.elapsedRealtime() + PROBE_AWAKE_MS
-        setLocks(held = true, multicast = false)
+        setLocks(held = true, multicast = app.services.settings.settings.value.enableLsd)
+    }
+
+    @Synchronized
+    private fun onProbeAlarm() {
+        probeScheduled = false
+        beginProbe()
     }
 
     private fun probeIntent(): PendingIntent = PendingIntent.getBroadcast(
@@ -179,7 +192,7 @@ class TorrentService : LifecycleService() {
     /** Wakes the service from deep sleep; see [scheduleProbe]. */
     class ProbeReceiver : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            instance?.beginProbe()
+            instance?.onProbeAlarm()
         }
     }
 

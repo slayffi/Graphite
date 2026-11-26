@@ -33,7 +33,7 @@ enum class DetailsTab { OVERVIEW, FILES, PEERS, TRACKERS, PIECES }
 class DetailsViewModel(private val env: AppEnvironment, val torrentId: String) : ViewModel() {
     val item: StateFlow<TorrentItem?> = env.controller.torrents
         .map { list -> list.firstOrNull { it.id == torrentId } }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, env.controller.torrents.value.firstOrNull { it.id == torrentId })
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), env.controller.torrents.value.firstOrNull { it.id == torrentId })
 
     private val _tab = MutableStateFlow(DetailsTab.OVERVIEW)
     val tab: StateFlow<DetailsTab> = _tab.asStateFlow()

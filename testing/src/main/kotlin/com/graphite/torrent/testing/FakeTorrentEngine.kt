@@ -107,7 +107,13 @@ class FakeTorrentEngine : TorrentEngine {
     override fun removeTrackers(id: String, urls: List<String>) {}
     override fun reannounce(id: String) {}
     override fun files(id: String): List<FileEntry> = listOf(FileEntry(0, "a.bin", 1000, 1000, FilePriority.NORMAL))
-    override fun peers(id: String): List<PeerEntry> = emptyList()
+    /** How many times the peer list of each torrent was asked for (tests of polling). */
+    val peerRequests = java.util.concurrent.ConcurrentHashMap<String, Int>()
+
+    override fun peers(id: String): List<PeerEntry> {
+        peerRequests.merge(id, 1, Int::plus)
+        return emptyList()
+    }
     override fun trackers(id: String): List<TrackerEntry> = emptyList()
     override fun pieces(id: String): PieceMapSnapshot = PieceMapSnapshot.EMPTY
     override fun metadata(id: String): TorrentMetadata? = null

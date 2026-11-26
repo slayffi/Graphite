@@ -109,7 +109,13 @@ class MainActivity : ComponentActivity(), BridgeHost {
         if (!app.ready) return
         app.bridge.host = this
         // Restarts the engine if the user chose "Exit" from the notification earlier.
-        app.services.scope.launch { app.ensureRunning() }
+        app.services.scope.launch {
+            app.ensureRunning()
+            // Android refuses to start the service while the app is in the background (a download added by
+            // RSS or the watched folder, for example). Now it is allowed: make sure it runs if it is needed.
+            val controller = app.services.controller
+            if (TorrentService.needsService(controller.torrents.value, controller.session.value)) TorrentService.start(this@MainActivity)
+        }
     }
 
     override fun onDestroy() {

@@ -1,6 +1,7 @@
 package com.graphite.torrent.ui.app
 
 import androidx.compose.ui.test.ComposeTimeoutException
+import com.graphite.torrent.ui.app.details.DetailsViewModel
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.printToString
@@ -144,6 +145,27 @@ class GraphiteAppUiTest {
         onAllNodes(hasContentDescription("Alpha") and hasClickAction()).onFirst().performTouchInput { longClick() }
         click(hasContentDescription("Pause") and hasClickAction())
         waitUntil(timeoutMillis = 5_000) { harness.engine.state.value.getValue(ALPHA).state == TorrentState.PAUSED }
+    }
+
+    @Test
+    fun closedDetailsPageStopsAskingTheEngine() = runDesktopComposeUiTest(1280, 800) {
+        seed()
+        launchApp()
+        click(hasContentDescription("Alpha") and hasClickAction())
+        click(hasText("Peers") and hasClickAction())
+        waitUntil(timeoutMillis = 5_000) { (harness.engine.peerRequests[ALPHA] ?: 0) > 0 }
+
+        // Another download is opened: the first page is gone and must not keep polling for as long as the app runs.
+        click(hasContentDescription("Beta") and hasClickAction())
+        click(hasText("Peers") and hasClickAction())
+        waitUntil(timeoutMillis = 5_000) { (harness.engine.peerRequests[BETA] ?: 0) > 0 }
+        Thread.sleep(500)
+        val before = harness.engine.peerRequests[ALPHA]
+        val betaBefore = harness.engine.peerRequests[BETA] ?: 0
+        Thread.sleep(2 * DetailsViewModel.POLL_MS + 500)
+        waitForIdle()
+        assertEquals(before, harness.engine.peerRequests[ALPHA], "the closed page still polls")
+        assertTrue((harness.engine.peerRequests[BETA] ?: 0) > betaBefore, "the open page must keep refreshing")
     }
 
     @Test
