@@ -24,6 +24,8 @@ object CrashReporter {
 
     fun install(app: Application) {
         Thread.setDefaultUncaughtExceptionHandler { thread, error ->
+            // Saved first: Android may refuse to open the report from a dying process, then the next start shows it.
+            StartupGuard.recordException(thread.name, error)
             try {
                 show(app, save(app, error, thread.name))
             } catch (_: Throwable) {
@@ -36,8 +38,12 @@ object CrashReporter {
 
     /** Shows the report for an error that was caught (for example the engine failed to start). */
     fun report(context: Context, error: Throwable) {
+        StartupGuard.recordException(Thread.currentThread().name, error)
         runCatching { show(context, save(context, error, Thread.currentThread().name)) }
     }
+
+    /** Opens the report screen from a visible activity (allowed even on Android 10+). */
+    fun showFrom(context: Context, report: String) = show(context, report)
 
     fun save(context: Context, error: Throwable, thread: String): String {
         val trace = StringWriter().also { error.printStackTrace(PrintWriter(it)) }.toString()
@@ -62,7 +68,7 @@ object CrashReporter {
     }
 
     /** True in the separate process that only hosts [CrashActivity]. */
-    fun isCrashProcess(app: Application): Boolean {
+    fun isCrashProcess(): Boolean {
         val name = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             Application.getProcessName()
         } else {

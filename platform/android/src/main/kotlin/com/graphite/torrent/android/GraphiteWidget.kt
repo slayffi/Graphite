@@ -80,7 +80,7 @@ data class WidgetSummary(
 class GraphiteWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val app = context.applicationContext as GraphiteApplication
-        val initial = WidgetSummary.of(app.services.controller.torrents.value, app.services.controller.session.value)
+        val initial = if (app.ready) WidgetSummary.of(app.services.controller.torrents.value, app.services.controller.session.value) else WidgetSummary()
         provideContent {
             WidgetContent(context, latest.value ?: initial)
         }
@@ -185,6 +185,7 @@ class ToggleAllAction : ActionCallback {
 
 internal suspend fun toggleAll(context: Context) {
     val app = context.applicationContext as GraphiteApplication
+    if (!app.ready) return
     app.ensureRunning()
     val controller = app.services.controller
     if (controller.torrents.value.any { it.state in TorrentService.ACTIVE }) {

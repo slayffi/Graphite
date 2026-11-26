@@ -1,6 +1,9 @@
 package com.graphite.torrent.android
 
 import android.app.Application
+import com.graphite.torrent.core.settings.DiskIoMode
+import com.graphite.torrent.core.engine.NativeLibraries
+import android.content.Context
 import com.graphite.torrent.core.controller.ControllerNotice
 import com.graphite.torrent.data.DatabaseFactory
 import com.graphite.torrent.data.GraphiteServices
@@ -32,14 +35,38 @@ class GraphiteApplication : Application() {
     /** Emitted when the user chose "Exit" in the notification so the activity can close. */
     val exitRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 
+    /** Report about a failed previous start; when set, this start only shows it (safe mode). */
+    var safeModeReport: String? = null
+        private set
+
+    /** True once the services exist; the widget, the tile and the service check it. */
+    @Volatile var ready = false
+        private set
+
+    override fun attachBaseContext(base: Context) {
+        super.attachBaseContext(base)
+        if (CrashReporter.isCrashProcess()) return
+        // Runs before content providers and onCreate, so even very early failures are caught next time.
+        safeModeReport = runCatching { StartupGuard.begin(base) }.getOrNull()
+    }
+
     @OptIn(FlowPreview::class)
     override fun onCreate() {
         super.onCreate()
         // The crash screen runs in its own process and needs none of the services.
-        if (CrashReporter.isCrashProcess(this)) return
+        if (CrashReporter.isCrashProcess()) return
         CrashReporter.install(this)
+        StartupGuard.step("onCreate")
+        if (safeModeReport != null) {
+            // The previous start failed: MainActivity shows the report instead of starting the engine again.
+            StartupGuard.step("safe mode: showing the report")
+            return
+        }
         Notifications.createChannels(this)
         val storage = AndroidStorage(this)
+        StartupGuard.step("native library")
+        NativeLibraries.ensureLoaded(null)
+        StartupGuard.step("services")
         services = GraphiteServices.create(
             dataDir = File(filesDir, "graphite"),
             driver = DatabaseFactory.createDriver(this),
@@ -66,9 +93,14 @@ class GraphiteApplication : Application() {
                 backup = services.backup,
             ),
         )
+        ready = true
+        StartupGuard.step("services ready")
         services.scope.launch {
             try {
+                applyAndroidDefaults()
+                StartupGuard.step("engine start")
                 services.controller.start()
+                StartupGuard.step("engine running")
                 services.startAutomation()
                 remote.restore()
             } catch (e: CancellationException) {
@@ -107,6 +139,17 @@ class GraphiteApplication : Application() {
                     GraphiteTileService.refresh(this@GraphiteApplication)
                 }
         }
+    }
+
+    /**
+     * libtorrent 2's memory-mapped disk I/O is unreliable on Android's shared storage (FUSE) and on
+     * 32-bit devices: use pread/pwrite there. Applied once, the user can still change it.
+     */
+    private suspend fun applyAndroidDefaults() {
+        val prefs = getSharedPreferences("graphite_android", MODE_PRIVATE)
+        if (prefs.getBoolean("defaults_v1", false)) return
+        services.settings.update { it.copy(diskIoMode = DiskIoMode.POSIX) }
+        prefs.edit().putBoolean("defaults_v1", true).apply()
     }
 
     /** Restarts the engine and the automation after "Exit" (called when the UI comes back). */

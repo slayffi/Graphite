@@ -23,8 +23,9 @@ class GraphiteTileService : TileService() {
     override fun onStartListening() {
         super.onStartListening()
         scope?.cancel()
+        val app = application as GraphiteApplication
+        if (!app.ready) return
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Main).also { s ->
-            val app = application as GraphiteApplication
             s.launch {
                 app.services.controller.session.collect { render() }
             }
@@ -40,6 +41,7 @@ class GraphiteTileService : TileService() {
     override fun onClick() {
         super.onClick()
         val app = application as GraphiteApplication
+        if (!app.ready) return
         app.services.scope.launch {
             toggleAll(this@GraphiteTileService)
             CoroutineScope(Dispatchers.Main).launch { render() }
@@ -49,6 +51,7 @@ class GraphiteTileService : TileService() {
     private fun render() {
         val tile = qsTile ?: return
         val app = application as GraphiteApplication
+        if (!app.ready) return
         val summary = WidgetSummary.of(app.services.controller.torrents.value, app.services.controller.session.value)
         val units = if (Locale.getDefault().language == "ru") UnitLabels.Russian else UnitLabels.English
         tile.icon = Icon.createWithResource(this, R.drawable.ic_stat_graphite)

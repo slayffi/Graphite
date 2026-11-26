@@ -1,6 +1,7 @@
 package com.graphite.torrent.android
 
 import android.app.Activity
+import android.app.ActivityManager
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
@@ -31,6 +32,8 @@ class CrashActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val report = intent.getStringExtra(EXTRA_REPORT).orEmpty()
+        // Seen: the next start of Graphite tries normally again.
+        StartupGuard.acknowledge(this)
         window.statusBarColor = BG
         window.navigationBarColor = BG
 
@@ -61,6 +64,10 @@ class CrashActivity : Activity() {
             setPadding(0, dp(16), 0, 0)
         }
         buttons.addView(button(getString(R.string.crash_restart), primary = false) {
+            // End the other Graphite processes first so the app starts from scratch.
+            getSystemService(ActivityManager::class.java)?.runningAppProcesses
+                ?.filter { it.pid != Process.myPid() }
+                ?.forEach { Process.killProcess(it.pid) }
             startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
             finish()
             Process.killProcess(Process.myPid())

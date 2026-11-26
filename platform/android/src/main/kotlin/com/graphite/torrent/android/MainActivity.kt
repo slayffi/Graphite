@@ -5,6 +5,7 @@ import android.graphics.Color
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Process
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.SystemBarStyle
@@ -17,6 +18,7 @@ import com.graphite.torrent.ui.app.GraphiteApp
 import com.graphite.torrent.ui.app.IncomingRequest
 import com.graphite.torrent.ui.app.navigation.Navigator
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity(), BridgeHost {
@@ -40,6 +42,15 @@ class MainActivity : ComponentActivity(), BridgeHost {
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
         )
         super.onCreate(savedInstanceState)
+        app.safeModeReport?.let { report ->
+            // The previous start failed: show why instead of failing again, then end this process so the
+            // next start is a clean one.
+            CrashReporter.showFrom(this, report)
+            finishAffinity()
+            window.decorView.postDelayed({ Process.killProcess(Process.myPid()) }, 300)
+            return
+        }
+        StartupGuard.step("activity")
         app.bridge.host = this
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -53,6 +64,12 @@ class MainActivity : ComponentActivity(), BridgeHost {
         })
 
         setContent { GraphiteApp(app.env, navigator) }
+        lifecycleScope.launch {
+            StartupGuard.step("ui")
+            // A start that shows the UI and keeps running for a few seconds counts as good.
+            delay(HEALTHY_AFTER_MS)
+            StartupGuard.healthy()
+        }
 
         lifecycleScope.launch { app.exitRequests.collect { finishAndRemoveTask() } }
         if (savedInstanceState == null) handleIntent(intent)
@@ -65,6 +82,7 @@ class MainActivity : ComponentActivity(), BridgeHost {
 
     override fun onResume() {
         super.onResume()
+        if (!app.ready) return
         app.bridge.host = this
         // Restarts the engine if the user chose "Exit" from the notification earlier.
         app.services.scope.launch { app.ensureRunning() }
@@ -173,5 +191,6 @@ class MainActivity : ComponentActivity(), BridgeHost {
 
     companion object {
         const val ACTION_ADD = "com.graphite.torrent.ADD"
+        private const val HEALTHY_AFTER_MS = 8_000L
     }
 }

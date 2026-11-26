@@ -30,6 +30,10 @@ class TorrentService : LifecycleService() {
 
     override fun onCreate() {
         super.onCreate()
+        if (!app.ready) {
+            stopSelf()
+            return
+        }
         val notification = Notifications.progress(this, app.services.controller.session.value, app.services.controller.torrents.value)
         ServiceCompat.startForeground(
             this, Notifications.ID_SERVICE, notification,
@@ -41,6 +45,7 @@ class TorrentService : LifecycleService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
+        if (!app.ready) return START_NOT_STICKY
         val controller = app.services.controller
         when (intent?.action) {
             ACTION_PAUSE_ALL -> lifecycleScope.launch { controller.pauseAll() }
