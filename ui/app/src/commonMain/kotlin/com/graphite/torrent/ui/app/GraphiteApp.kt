@@ -53,7 +53,11 @@ import com.graphite.torrent.ui.app.details.DetailsScreen
 import com.graphite.torrent.ui.app.details.DetailsViewModel
 import com.graphite.torrent.ui.app.downloads.DownloadsScreen
 import com.graphite.torrent.ui.app.downloads.DownloadsViewModel
+import com.graphite.torrent.ui.app.automation.RssScreen
+import com.graphite.torrent.ui.app.automation.SchedulerScreen
 import com.graphite.torrent.ui.app.log.EventLogScreen
+import com.graphite.torrent.ui.app.player.PlayerScreen
+import com.graphite.torrent.ui.app.remote.RemoteScreen
 import com.graphite.torrent.ui.app.navigation.Destination
 import com.graphite.torrent.ui.app.navigation.Navigator
 import com.graphite.torrent.ui.app.navigation.RootTab
@@ -213,6 +217,10 @@ private fun AppContent(
                 GraphiteBottomBar(navItems, navigator.tab.name, { navigator.selectTab(RootTab.valueOf(it)) })
             }
         }
+        // The player covers the whole window, navigation included.
+        (navigator.current as? Destination.Player)?.let { p ->
+            PlayerScreen(env, p.id, p.fileIndex, p.title, onBack = { navigator.back() })
+        }
         GraphiteSnackbarHost(
             snackbar,
             if (wide) Modifier.align(Alignment.BottomEnd).padding(24.dp).widthIn(max = 480.dp) else Modifier.align(Alignment.BottomCenter).padding(bottom = 88.dp),
@@ -250,6 +258,19 @@ private fun TabContent(
                 EventLogScreen(env, back)
                 return
             }
+            Destination.Scheduler -> env.features.scheduler?.let {
+                SchedulerScreen(env, it, back)
+                return
+            }
+            Destination.Rss -> env.features.rss?.let {
+                RssScreen(env, it, back, onShowMessage)
+                return
+            }
+            Destination.Remote -> env.features.remote?.let {
+                RemoteScreen(env, it, back, onShowMessage)
+                return
+            }
+            is Destination.Player -> Unit
             else -> if (extraScreens(current, back)) return
         }
     }

@@ -67,7 +67,7 @@ class MainActivity : ComponentActivity(), BridgeHost {
         super.onResume()
         app.bridge.host = this
         // Restarts the engine if the user chose "Exit" from the notification earlier.
-        app.services.scope.launch { app.services.controller.start() }
+        app.services.scope.launch { app.ensureRunning() }
     }
 
     override fun onDestroy() {

@@ -92,6 +92,10 @@ class DesktopPlatformServices(private val ownerProvider: () -> Frame?) : Platfor
 
     override fun shareText(text: String) = copyToClipboard(text)
 
+    override fun openUrl(url: String) {
+        runCatching { Desktop.getDesktop().browse(java.net.URI(url)) }
+    }
+
     override fun haptic() = Unit
 
     override fun displayPath(path: String): String = path

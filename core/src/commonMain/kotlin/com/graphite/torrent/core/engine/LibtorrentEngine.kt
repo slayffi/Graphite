@@ -822,6 +822,28 @@ class LibtorrentEngine(
             id
         }
 
+    override suspend fun addFromResumeData(data: ByteArray): String = withContext(Dispatchers.IO) {
+        if (scope == null) throw GraphiteException(ErrorKind.UNKNOWN, "engine is not running")
+        val ec = error_code()
+        val swigParams = libtorrent.read_resume_data_ex(Vectors.bytes2byte_vector(data), ec)
+        if (ec.failed()) throw GraphiteException(ErrorKind.INVALID_TORRENT, ec.message())
+        val params = AddTorrentParams(swigParams)
+        val id = idOfParams(params) ?: throw GraphiteException(ErrorKind.INVALID_TORRENT, "no info hash")
+        if (handles.containsKey(id)) throw GraphiteException(ErrorKind.DUPLICATE, params.getName())
+        File(params.getSavePath()).mkdirs()
+        cache.getOrPut(id) { CachedInfo() }.apply {
+            this.savePath = params.getSavePath()
+            name = params.getName()
+        }
+        val deferred = CompletableDeferred<TorrentHandle>()
+        pendingAdds[id] = deferred
+        sm.swig().async_add_torrent(params.swig())
+        withTimeout(ADD_TIMEOUT_MS) { deferred.await() }
+        id
+    }
+
+    override fun resumeData(id: String): ByteArray? = resumeStore.loadAll()[id]
+
     private fun decodeBase64(text: String): ByteArray = try {
         Base64Util.decode(text)
     } catch (e: IllegalArgumentException) {

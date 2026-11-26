@@ -31,21 +31,18 @@ class DesktopController(private val services: GraphiteServices) {
     private var window: ComposeWindow? = null
     private val jobs = ArrayList<Job>()
     private var hotkeys: GlobalHotkeys? = null
-    var extraFeatures: AppFeatures? = null
-
     fun features(): AppFeatures {
         val desktopFeature = object : DesktopFeature {
             override fun openMiniWindow() {
                 miniVisible.value = true
             }
         }
-        val extra = extraFeatures
         return AppFeatures(
-            streaming = extra?.streaming,
-            remote = extra?.remote,
-            rss = extra?.rss,
-            scheduler = extra?.scheduler,
-            backup = extra?.backup,
+            streaming = DesktopStreaming(services),
+            remote = DesktopRemote(services),
+            rss = services.rss,
+            scheduler = services.scheduler,
+            backup = services.backup,
             desktop = desktopFeature,
         )
     }

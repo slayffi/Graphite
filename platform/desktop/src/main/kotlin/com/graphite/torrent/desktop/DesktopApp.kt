@@ -85,6 +85,9 @@ fun runDesktopApp(
 
     fun quit() {
         desktop.stop()
+        services.stopAutomation()
+        services.remoteServer.stop()
+        services.streams.stop()
         runBlocking { services.controller.stop() }
         onExit()
         exitApplication()

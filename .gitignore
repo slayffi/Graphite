@@ -11,3 +11,7 @@ captures/
 *.keystore
 !debug.keystore
 platform/desktop/resources/windows/vlc/
+
+# Python
+__pycache__/
+*.pyc

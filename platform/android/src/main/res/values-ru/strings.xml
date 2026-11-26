@@ -15,4 +15,15 @@
     <string name="qr_title">Наведите камеру на QR-код</string>
     <string name="qr_no_camera">Для сканирования QR-кода нужен доступ к камере.</string>
     <string name="close">Закрыть</string>
+    <string name="widget_name">Загрузки Graphite</string>
+    <string name="widget_description">Скорость загрузки и кнопка паузы / продолжения.</string>
+    <string name="widget_empty">Нет загрузок</string>
+    <string name="widget_idle">На паузе или готово: %1$d</string>
+    <string name="tile_paused">Пауза</string>
+    <plurals name="widget_active">
+        <item quantity="one">%1$d загрузка</item>
+        <item quantity="few">%1$d загрузки</item>
+        <item quantity="many">%1$d загрузок</item>
+        <item quantity="other">%1$d загрузки</item>
+    </plurals>
 </resources>

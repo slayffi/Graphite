@@ -67,7 +67,10 @@ class FakeTorrentEngine : TorrentEngine {
         val (id, name) = when (val src = request.source) {
             is AddSource.Magnet -> (MagnetLink.parse(src.uri) ?: throw GraphiteException(ErrorKind.INVALID_TORRENT)).let { it.id to (it.displayName ?: it.id) }
             is AddSource.Preview -> src.metadata.id to src.metadata.name
-            is AddSource.TorrentFile -> "f".repeat(40) to "file"
+            is AddSource.TorrentFile -> {
+                if (com.graphite.torrent.core.util.Base64Util.decode(src.dataBase64).isEmpty()) throw GraphiteException(ErrorKind.INVALID_TORRENT, "empty")
+                "f".repeat(40) to "file"
+            }
         }
         if (id in state.value) throw GraphiteException(ErrorKind.DUPLICATE, name)
         state.update { it + (id to item(id, name, defaultSavePath)) }
@@ -110,5 +113,12 @@ class FakeTorrentEngine : TorrentEngine {
     override fun havePiece(id: String, piece: Int): Boolean = false
     override fun prioritizePieces(id: String, pieces: IntRange, deadlineMs: Int) {}
     override fun setIpFilter(ranges: List<IpRange>) { ipFilters += ranges }
+    val resume = HashMap<String, ByteArray>()
+    override suspend fun addFromResumeData(data: ByteArray): String {
+        val id = String(data)
+        state.update { it + (id to item(id, "restored-$id", "/restored")) }
+        return id
+    }
+    override fun resumeData(id: String): ByteArray? = resume[id] ?: id.toByteArray()
     override suspend fun saveAllResumeData() {}
 }

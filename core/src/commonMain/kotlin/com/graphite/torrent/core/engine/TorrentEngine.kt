@@ -85,6 +85,12 @@ interface TorrentEngine {
     /** Asks libtorrent to fetch these pieces first (streaming). */
     fun prioritizePieces(id: String, pieces: IntRange, deadlineMs: Int)
 
+    /** Re-adds a torrent from exported resume data (backup import). Returns its id. */
+    suspend fun addFromResumeData(data: ByteArray): String
+
+    /** Current resume data of a torrent, for backups; null when unknown. */
+    fun resumeData(id: String): ByteArray?
+
     fun setIpFilter(ranges: List<IpRange>)
     suspend fun saveAllResumeData()
 }

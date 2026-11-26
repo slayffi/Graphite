@@ -73,6 +73,9 @@ interface PlatformServices {
 
     /** Opens the platform's system settings page for this app (battery optimization, permissions). */
     fun openAppSettings() {}
+
+    /** Opens a URL (stream link) in an external app. */
+    fun openUrl(url: String) {}
 }
 
 /** Everything the screens need. Built by each platform from [com.graphite.torrent.data.GraphiteServices]. */
@@ -110,19 +113,17 @@ class AppEnvironment(
 class AppFeatures(
     val streaming: StreamingFeature? = null,
     val remote: RemoteFeature? = null,
-    val rss: RssFeature? = null,
-    val scheduler: SchedulerFeature? = null,
-    val backup: BackupFeature? = null,
+    val rss: com.graphite.torrent.data.automation.RssService? = null,
+    val scheduler: com.graphite.torrent.data.automation.SchedulerService? = null,
+    val backup: com.graphite.torrent.data.backup.BackupService? = null,
     val desktop: DesktopFeature? = null,
-    val activeRemote: StateFlow<Boolean> = MutableStateFlow(false),
 )
 
-/** Streaming / built-in player (stage 4). */
+/** Streaming / built-in player. */
 interface StreamingFeature {
     /** Returns a URL the player can open while the file is still downloading. */
     suspend fun streamUrl(torrentId: String, fileIndex: Int): String
 
-    /** Composable player surface; implemented per platform. */
     val player: PlayerFactory
 }
 
@@ -156,29 +157,21 @@ data class PlayerState(
     val available: Boolean = true,
 )
 
+/** Remote control: the desktop serves, the phone connects. */
 interface RemoteFeature {
+    val isServer: Boolean
+
     /** Desktop: pairing QR payload; null when the server is disabled. */
     val pairingPayload: StateFlow<String?>
     val connectedClients: StateFlow<Int>
+    suspend fun regenerateKey()
 
-    /** Android: connect to a desktop from a scanned QR payload. */
+    /** Android: connect to a desktop from a scanned QR payload. Throws GraphiteException. */
     suspend fun pair(payload: String)
     suspend fun disconnect()
+    suspend fun forget()
     val connected: StateFlow<Boolean>
     val remoteName: StateFlow<String?>
-}
-
-interface RssFeature {
-    val screen: @androidx.compose.runtime.Composable (onBack: () -> Unit) -> Unit
-}
-
-interface SchedulerFeature {
-    val screen: @androidx.compose.runtime.Composable (onBack: () -> Unit) -> Unit
-}
-
-interface BackupFeature {
-    suspend fun export(): ByteArray
-    suspend fun import(bytes: ByteArray): Int
 }
 
 interface DesktopFeature {

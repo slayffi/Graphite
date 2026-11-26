@@ -51,7 +51,11 @@ fun main(args: Array<String>) {
     }
     handleArguments(env, args.toList())
 
-    services.scope.launch { services.controller.start() }
+    services.scope.launch {
+        services.controller.start()
+        services.startAutomation()
+        services.remoteServer.bind()
+    }
 
     runDesktopApp(env, services, desktop, onFrame = { mainFrame = it }, onExit = { instance.release() })
 }

@@ -15,4 +15,13 @@
     <string name="qr_title">Point the camera at a QR code</string>
     <string name="qr_no_camera">Camera permission is needed to scan QR codes.</string>
     <string name="close">Close</string>
+    <string name="widget_name">Graphite downloads</string>
+    <string name="widget_description">Download speed and a pause / resume button.</string>
+    <string name="widget_empty">No downloads</string>
+    <string name="widget_idle">Paused or done: %1$d</string>
+    <string name="tile_paused">Paused</string>
+    <plurals name="widget_active">
+        <item quantity="one">%1$d downloading</item>
+        <item quantity="other">%1$d downloading</item>
+    </plurals>
 </resources>

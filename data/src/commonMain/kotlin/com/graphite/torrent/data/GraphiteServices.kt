@@ -3,7 +3,15 @@ package com.graphite.torrent.data
 import app.cash.sqldelight.db.SqlDriver
 import com.graphite.torrent.core.engine.FileResumeStore
 import com.graphite.torrent.core.engine.LibtorrentEngine
+import com.graphite.torrent.data.automation.FileWatchFolderSource
+import com.graphite.torrent.data.automation.RssService
+import com.graphite.torrent.data.automation.SchedulerService
+import com.graphite.torrent.data.automation.WatchFolderService
+import com.graphite.torrent.data.automation.WatchFolderSource
+import com.graphite.torrent.data.backup.BackupService
 import com.graphite.torrent.data.db.GraphiteDatabase
+import com.graphite.torrent.data.remote.RemoteServer
+import com.graphite.torrent.data.stream.StreamServer
 import com.graphite.torrent.data.repo.EventLogRepository
 import com.graphite.torrent.data.repo.HistoryRepository
 import com.graphite.torrent.data.repo.StatsRepository
@@ -27,7 +35,28 @@ class GraphiteServices(
     val history: HistoryRepository,
     val storage: PlatformStorage,
     val controller: LocalTorrentController,
+    /** What the UI talks to: the local engine, or a paired desktop in remote mode. */
+    val switchable: SwitchableTorrentController,
+    val scheduler: SchedulerService,
+    val rss: RssService,
+    val watchFolder: WatchFolderService,
+    val backup: BackupService,
+    val streams: StreamServer,
+    val remoteServer: RemoteServer,
 ) {
+    /** Starts scheduler, RSS and the watched folder. */
+    fun startAutomation() {
+        scheduler.start()
+        rss.start()
+        watchFolder.start()
+    }
+
+    fun stopAutomation() {
+        scheduler.stop()
+        rss.stop()
+        watchFolder.stop()
+    }
+
     companion object {
         fun create(
             dataDir: File,
@@ -35,6 +64,7 @@ class GraphiteServices(
             storage: PlatformStorage,
             nativeExtractDir: String? = null,
             scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+            watchSources: List<WatchFolderSource> = listOf(FileWatchFolderSource()),
         ): GraphiteServices {
             dataDir.mkdirs()
             val database = GraphiteDatabase(driver)
@@ -58,7 +88,20 @@ class GraphiteServices(
                 storage = storage,
                 scope = scope,
             )
-            return GraphiteServices(scope, dataDir, database, settings, engine, meta, stats, eventLog, history, storage, controller)
+            val scheduler = SchedulerService(database, settings, controller, eventLog, scope)
+            val rss = RssService(database, settings, controller, eventLog, scope)
+            val watchFolder = WatchFolderService(settings, controller, eventLog, scope, watchSources)
+            val backup = BackupService(engine, settings, meta, scheduler, rss, eventLog)
+            return GraphiteServices(
+                scope, dataDir, database, settings, engine, meta, stats, eventLog, history, storage, controller,
+                switchable = SwitchableTorrentController(controller, scope),
+                scheduler = scheduler,
+                rss = rss,
+                watchFolder = watchFolder,
+                backup = backup,
+                streams = StreamServer(engine, scope),
+                remoteServer = RemoteServer(controller, settings, eventLog, scope),
+            )
         }
     }
 }
