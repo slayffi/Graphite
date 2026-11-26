@@ -109,8 +109,9 @@ class LocalTorrentController(
     private val relocating = MutableStateFlow<Set<String>>(emptySet())
 
     override val torrents: StateFlow<List<TorrentItem>> =
-        combine(engine.torrents, meta.rows, meta.tags, relocating) { live, rows, tags, moving -> merge(live, rows, tags, moving) }
-            .stateIn(scope, SharingStarted.Eagerly, emptyList())
+        combine(engine.torrents, meta.rows, meta.tags, relocating, storage.relocationProgress) { live, rows, tags, moving, copied ->
+            merge(live, rows, tags, moving, copied)
+        }.stateIn(scope, SharingStarted.Eagerly, emptyList())
 
     val runtimeOverrides: StateFlow<RuntimeOverrides> = overrides.asStateFlow()
 
@@ -200,6 +201,7 @@ class LocalTorrentController(
         rows: Map<String, Torrent>,
         tags: Map<String, List<String>>,
         moving: Set<String>,
+        copied: Map<String, Float>,
     ): List<TorrentItem> {
         val result = ArrayList<TorrentItem>(live.size + 8)
         for ((id, item) in live) {
@@ -207,6 +209,8 @@ class LocalTorrentController(
             result += item.copy(
                 // Shown as "moving" (and keeps the Android foreground service alive) while files are copied.
                 state = if (id in moving) TorrentState.MOVING else item.state,
+                // During the copy the card shows how much has been moved, not the finished 100 %.
+                progress = if (id in moving) copied[id] ?: item.progress else item.progress,
                 category = row?.category,
                 tags = tags[id].orEmpty(),
                 addedAt = row?.added_at?.takeIf { it > 0 } ?: item.addedAt,

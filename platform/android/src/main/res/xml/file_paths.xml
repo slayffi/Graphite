@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Only downloaded files in the app's own external folder can be handed to a viewer app.
+     Internal storage (settings, database, pairing key) is deliberately not listed. -->
 <paths>
     <external-files-path name="downloads" path="." />
-    <files-path name="internal" path="." />
-    <external-path name="storage" path="." />
 </paths>

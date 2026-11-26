@@ -1,5 +1,6 @@
 package com.graphite.torrent.data.automation
 
+import com.graphite.torrent.core.net.BoundedIo
 import com.graphite.torrent.core.controller.TorrentController
 import com.graphite.torrent.core.engine.ErrorMapper
 import com.graphite.torrent.core.model.AddRequest
@@ -41,7 +42,9 @@ class FileWatchFolderSource : WatchFolderSource {
             ?.map { WatchedFile(it.name, it.absolutePath) }
             .orEmpty()
 
-    override fun read(file: WatchedFile): ByteArray = File(file.handle).readBytes()
+    // A huge "something.torrent" (the watched folder is often the browser's download folder) must be marked
+    // invalid, not read into memory again every few seconds.
+    override fun read(file: WatchedFile): ByteArray = BoundedIo.readFile(File(file.handle), BoundedIo.MAX_TORRENT_BYTES)
 
     override fun finish(file: WatchedFile, action: WatchFolderAction, success: Boolean) {
         val f = File(file.handle)

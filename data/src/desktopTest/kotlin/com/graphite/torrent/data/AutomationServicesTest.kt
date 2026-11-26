@@ -129,17 +129,32 @@ class AutomationServicesTest {
             category = "Movies", tags = listOf("4k"),
         ))
         source.meta.saveCategory(Category("Movies", "/movies"))
-        source.settings.update { it.copy(profile = SpeedProfile.BALANCED, remoteKeyBase64 = "secret") }
+        source.settings.update {
+            it.copy(
+                profile = SpeedProfile.BALANCED, remoteKeyBase64 = "secret",
+                // What a crafted backup could carry: open the remote port, poll a network share, proxy password.
+                remoteServerEnabled = true, remotePort = 4444,
+                watchFolderEnabled = true, watchFolderPath = "\\\\attacker\\share",
+                proxy = it.proxy.copy(host = "proxy.example", password = "proxy-secret"),
+            )
+        }
         val sourceScheduler = SchedulerService(source.db, source.settings, source.controller, source.log, scope)
         sourceScheduler.save(ScheduleRule(days = 1, startMinute = 60, endMinute = 120))
-        val exported = BackupService(source.engine, source.settings, source.meta, sourceScheduler, null, source.log).export()
-        assertTrue(!exported.toString(Charsets.UTF_8).contains("secret"), "remote key is not exported")
+        val exported = BackupService(source.engine, source.settings, source.meta, sourceScheduler, null, source.log, { source.controller.defaultSavePath() }).export()
+        assertTrue(!exported.toString(Charsets.UTF_8).contains("secret"), "the remote key and the proxy password are not exported")
 
         val target = Env("dst")
         target.controller.start()
         val targetScheduler = SchedulerService(target.db, target.settings, target.controller, target.log, scope)
-        val restored = BackupService(target.engine, target.settings, target.meta, targetScheduler, null, target.log).import(exported)
+        val restored = BackupService(target.engine, target.settings, target.meta, targetScheduler, null, target.log, { target.controller.defaultSavePath() }).import(exported)
         assertEquals(1, restored)
+        // The file cannot open the remote-control port, point the watched folder at a network share or pick
+        // where restored downloads may write without being paused.
+        val after = target.settings.current()
+        assertTrue(!after.remoteServerEnabled, "remote control stays off")
+        assertEquals(48650, after.remotePort)
+        assertTrue(!after.watchFolderEnabled && after.watchFolderPath.isBlank(), "a network share is not taken over")
+        assertEquals(target.controller.defaultSavePath(), target.engine.lastSafeRoot)
         assertEquals(SpeedProfile.BALANCED, target.settings.current().profile)
         assertEquals("Movies", target.meta.get(id)?.category)
         assertEquals(listOf("4k"), target.meta.tagsOf(id))

@@ -75,11 +75,24 @@ class RemoteAndStreamingTest {
     fun cryptoRejectsTamperingAndForeignKeys() {
         val key = RemoteCrypto.newKey()
         val crypto = RemoteCrypto(key)
-        val sealed = crypto.seal("hello".toByteArray())
-        assertEquals("hello", crypto.open(sealed).toString(Charsets.UTF_8))
+        val aad = RemoteCrypto.REQUEST_AAD
+        val sealed = crypto.seal("hello".toByteArray(), aad)
+        assertEquals("hello", crypto.open(sealed, aad).toString(Charsets.UTF_8))
         val tampered = Envelope(sealed.n, sealed.c.dropLast(2) + if (sealed.c.endsWith("A")) "BB" else "AA")
-        assertEquals(ErrorKind.REMOTE_AUTH, assertFailsWith<GraphiteException> { crypto.open(tampered) }.error.kind)
-        assertEquals(ErrorKind.REMOTE_AUTH, assertFailsWith<GraphiteException> { RemoteCrypto(RemoteCrypto.newKey()).open(sealed) }.error.kind)
+        assertEquals(ErrorKind.REMOTE_AUTH, assertFailsWith<GraphiteException> { crypto.open(tampered, aad) }.error.kind)
+        assertEquals(ErrorKind.REMOTE_AUTH, assertFailsWith<GraphiteException> { RemoteCrypto(RemoteCrypto.newKey()).open(sealed, aad) }.error.kind)
+    }
+
+    @Test
+    fun responsesAreBoundToTheirRequest() {
+        val crypto = RemoteCrypto(RemoteCrypto.newKey())
+        val answer = crypto.seal("""{"ok":true}""".toByteArray(), RemoteCrypto.responseAad("request-1"))
+        assertEquals("""{"ok":true}""", crypto.open(answer, RemoteCrypto.responseAad("request-1")).toString(Charsets.UTF_8))
+        // A recorded answer cannot be replayed for another call, and a request cannot be passed off as an answer.
+        assertFailsWith<GraphiteException> { crypto.open(answer, RemoteCrypto.responseAad("request-2")) }
+        assertFailsWith<GraphiteException> { crypto.open(answer, RemoteCrypto.REQUEST_AAD) }
+        val request = crypto.seal("{}".toByteArray(), RemoteCrypto.REQUEST_AAD)
+        assertFailsWith<GraphiteException> { crypto.open(request, RemoteCrypto.responseAad("request-1")) }
     }
 
     @Test
@@ -120,6 +133,18 @@ class RemoteAndStreamingTest {
         assertEquals(TorrentState.PAUSED, engine.state.value.getValue(id).state)
         assertEquals("Desk", pairing.name)
 
+        // The phone can only name folders this PC already downloads into: a leaked pairing code must not be
+        // enough to write files anywhere (the autostart folder, for example).
+        val outside = File(dir.parentFile, "elsewhere-${System.nanoTime()}").absolutePath
+        val denied = assertFailsWith<GraphiteException> {
+            phone.add(AddRequest(AddSource.Magnet("magnet:?xt=urn:btih:${"9".repeat(40)}&dn=Evil"), savePath = outside))
+        }
+        assertEquals(ErrorKind.PERMISSION_DENIED, denied.error.kind)
+        assertTrue("9".repeat(40) !in engine.state.value)
+        assertTrue(!File(outside).exists(), "nothing was created outside the download folders")
+        val inside = phone.add(AddRequest(AddSource.Magnet("magnet:?xt=urn:btih:${"8".repeat(40)}&dn=Ok"), savePath = File(dir, "sub").absolutePath))
+        assertTrue(inside in engine.state.value)
+
         // A phone with another key is rejected.
         val stranger = RemoteTorrentController(pairing.copy(keyBase64 = Base64Util.encodeUrl(RemoteCrypto.newKey())), scope)
         assertEquals(ErrorKind.REMOTE_AUTH, assertFailsWith<GraphiteException> { stranger.pauseAll() }.error.kind)
@@ -151,6 +176,9 @@ class RemoteAndStreamingTest {
         assertEquals(200, full.first)
         assertContentEquals(data, full.second)
         assertEquals(404, get(url.replace("/stream/", "/stream/x"), null).first)
+        // The link of one file does not open another: each file has its own token.
+        assertEquals(404, get(url.replace("/$id/0/", "/$id/1/"), null).first)
+        assertEquals(404, get(url.replace("/$id/0/", "/${"e".repeat(40)}/0/"), null).first)
         streams.stop()
         engine.stop()
     }

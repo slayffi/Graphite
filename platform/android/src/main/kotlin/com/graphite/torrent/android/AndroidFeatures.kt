@@ -13,6 +13,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.graphite.torrent.core.model.ErrorKind
+import com.graphite.torrent.core.net.BoundedIo
 import com.graphite.torrent.core.model.GraphiteException
 import com.graphite.torrent.core.settings.WatchFolderAction
 import com.graphite.torrent.data.GraphiteServices
@@ -205,7 +206,7 @@ class SafWatchFolderSource(private val context: Context) : WatchFolderSource {
     }
 
     override fun read(file: WatchedFile): ByteArray =
-        context.contentResolver.openInputStream(Uri.parse(file.handle))?.use { it.readBytes() } ?: ByteArray(0)
+        context.contentResolver.openInputStream(Uri.parse(file.handle))?.use { BoundedIo.read(it, BoundedIo.MAX_TORRENT_BYTES) } ?: ByteArray(0)
 
     override fun finish(file: WatchedFile, action: WatchFolderAction, success: Boolean) {
         val doc = DocumentFile.fromSingleUri(context, Uri.parse(file.handle)) ?: return

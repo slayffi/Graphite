@@ -117,7 +117,9 @@ class FakeTorrentEngine : TorrentEngine {
     override fun prioritizePieces(id: String, pieces: IntRange, deadlineMs: Int) {}
     override fun setIpFilter(ranges: List<IpRange>) { ipFilters += ranges }
     val resume = HashMap<String, ByteArray>()
-    override suspend fun addFromResumeData(data: ByteArray): String {
+    var lastSafeRoot: String = ""
+    override suspend fun addFromResumeData(data: ByteArray, safeRoot: String): String {
+        lastSafeRoot = safeRoot
         val id = String(data)
         state.update { it + (id to item(id, "restored-$id", "/restored")) }
         return id

@@ -86,7 +86,13 @@ internal object LibVlcLoader {
             NativeLibrary.addSearchPath("vlc", it.absolutePath)
             NativeLibrary.addSearchPath("libvlccore", it.absolutePath)
         }
-        runCatching { Native.load(if (DesktopPaths.isWindows) "libvlc" else "vlc", LibVlc::class.java) }.getOrNull()
+        if (DesktopPaths.isWindows) {
+            // By full path only: loading "libvlc" by name would also look in the current folder.
+            candidates.map { File(it, "libvlc.dll") }.firstOrNull { it.isFile }
+                ?.let { dll -> runCatching { Native.load(dll.absolutePath, LibVlc::class.java) }.getOrNull() }
+        } else {
+            runCatching { Native.load("vlc", LibVlc::class.java) }.getOrNull()
+        }
     }
 }
 

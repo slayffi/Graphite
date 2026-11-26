@@ -11,6 +11,9 @@ import java.io.RandomAccessFile
 import java.net.InetAddress
 import java.net.URLEncoder
 import java.security.SecureRandom
+import javax.crypto.spec.SecretKeySpec
+import javax.crypto.Mac
+import java.security.MessageDigest
 
 /** Byte range parsed from a "Range" header (inclusive). */
 data class ByteRange(val start: Long, val end: Long)
@@ -45,21 +48,33 @@ object RangeHeader {
  * Requested byte ranges are mapped to pieces that get deadlines, and the response waits for them.
  */
 class StreamServer(private val engine: TorrentEngine, scope: CoroutineScope) {
-    private val token = ByteArray(12).also { SecureRandom().nextBytes(it) }.joinToString("") { "%02x".format(it) }
+    private val secret = ByteArray(32).also { SecureRandom().nextBytes(it) }
+
+    /**
+     * Each file gets its own token (HMAC of the torrent id and file index): a link handed to an external player
+     * opens that one file only, not everything Graphite has downloaded.
+     */
+    private fun tokenFor(torrentId: String, fileIndex: Int): String {
+        val mac = Mac.getInstance("HmacSHA256").apply { init(SecretKeySpec(secret, "HmacSHA256")) }
+        return mac.doFinal("$torrentId/$fileIndex".toByteArray()).take(16).joinToString("") { "%02x".format(it) }
+    }
+
     private val server = MiniHttpServer(InetAddress.getLoopbackAddress(), 0, scope, maxBody = 0) { req, res -> handle(req, res) }
 
     fun url(torrentId: String, fileIndex: Int, name: String): String {
         val port = server.start()
-        return "http://127.0.0.1:$port/stream/$token/$torrentId/$fileIndex/${URLEncoder.encode(name, "UTF-8").replace("+", "%20")}"
+        return "http://127.0.0.1:$port/stream/${tokenFor(torrentId, fileIndex)}/$torrentId/$fileIndex/${URLEncoder.encode(name, "UTF-8").replace("+", "%20")}"
     }
 
     fun stop() = server.stop()
 
     private suspend fun handle(req: HttpRequest, res: HttpResponder) {
         val parts = req.path.substringBefore('?').trim('/').split('/')
-        if (parts.size < 4 || parts[0] != "stream" || parts[1] != token) return res.text(404, "Not Found", "not found")
+        if (parts.size < 4 || parts[0] != "stream") return res.text(404, "Not Found", "not found")
         val id = parts[2]
-        val index = parts[3].toIntOrNull() ?: return res.text(400, "Bad Request", "bad index")
+        val index = parts[3].toIntOrNull() ?: return res.text(404, "Not Found", "not found")
+        // Constant-time comparison: the response time says nothing about how much of a guess was right.
+        if (!MessageDigest.isEqual(parts[1].toByteArray(), tokenFor(id, index).toByteArray())) return res.text(404, "Not Found", "not found")
         val entry = engine.files(id).firstOrNull { it.index == index } ?: return res.text(404, "Not Found", "no such file")
         val path = engine.filePath(id, index) ?: return res.text(404, "Not Found", "no path")
         val size = entry.size

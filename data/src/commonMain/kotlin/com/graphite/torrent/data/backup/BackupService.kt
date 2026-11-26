@@ -1,5 +1,8 @@
 package com.graphite.torrent.data.backup
 
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import java.io.File
 import com.graphite.torrent.core.engine.TorrentEngine
 import com.graphite.torrent.core.model.Category
 import com.graphite.torrent.core.model.ErrorKind
@@ -61,9 +64,11 @@ class BackupService(
     private val scheduler: SchedulerService?,
     private val rss: RssService?,
     private val eventLog: EventLogRepository,
+    /** Folder restored downloads may write into without being paused first. */
+    private val defaultSavePath: suspend () -> String,
     private val clock: () -> Long = System::currentTimeMillis,
 ) {
-    suspend fun export(): ByteArray {
+    suspend fun export(): ByteArray = withContext(Dispatchers.IO) {
         engine.saveAllResumeData()
         val rows = meta.all()
         val torrents = rows.map { row ->
@@ -84,8 +89,10 @@ class BackupService(
         val (feeds, rules) = rss?.exportFeeds() ?: (emptyList<RssFeed>() to emptyList())
         val backup = Backup(
             createdAt = clock(),
-            // Remote-control keys stay on this device.
-            settings = settings.current().copy(remoteKeyBase64 = "", remotePairing = null, remoteMode = false),
+            // Secrets stay on this device: the remote-control key and pairing, and the proxy password.
+            settings = settings.current().let {
+                it.copy(remoteKeyBase64 = "", remotePairing = null, remoteMode = false, proxy = it.proxy.copy(password = ""))
+            },
             torrents = torrents,
             categories = meta.categories.first(),
             schedule = scheduler?.all().orEmpty(),
@@ -93,11 +100,11 @@ class BackupService(
             rssRules = rules,
         )
         eventLog.log(EventType.SETTINGS_EXPORTED, torrents.size.toString())
-        return GraphiteJson.encodeToString(Backup.serializer(), backup).toByteArray(Charsets.UTF_8)
+        GraphiteJson.encodeToString(Backup.serializer(), backup).toByteArray(Charsets.UTF_8)
     }
 
     /** Returns how many downloads were restored. */
-    suspend fun import(bytes: ByteArray): Int {
+    suspend fun import(bytes: ByteArray): Int = withContext(Dispatchers.IO) {
         val backup = try {
             GraphiteJson.decodeFromString(Backup.serializer(), bytes.toString(Charsets.UTF_8))
         } catch (e: Exception) {
@@ -105,12 +112,29 @@ class BackupService(
         }
         if (backup.format != Backup.FORMAT) throw GraphiteException(ErrorKind.INVALID_TORRENT, "not a Graphite backup")
         val current = settings.current()
+        val imported = backup.settings
         settings.replace(
-            backup.settings.copy(
+            imported.copy(
                 listenPort = current.listenPort,
+                // Everything about remote control stays as it is here: a file must not be able to open the port.
+                remoteServerEnabled = current.remoteServerEnabled,
+                remotePort = current.remotePort,
                 remoteKeyBase64 = current.remoteKeyBase64,
                 remotePairing = current.remotePairing,
                 remoteMode = current.remoteMode,
+                // Folders are taken from the file only when they exist on this device (and are not network shares).
+                defaultSavePath = localFolderOr(imported.defaultSavePath, current.defaultSavePath),
+                moveCompletedTo = localFolderOr(imported.moveCompletedTo, current.moveCompletedTo),
+                watchFolderPath = localFolderOr(imported.watchFolderPath, current.watchFolderPath),
+                watchFolderEnabled = imported.watchFolderEnabled && localFolderOr(imported.watchFolderPath, "").isNotBlank(),
+                ipFilterPath = current.ipFilterPath,
+                ipFilterEnabled = current.ipFilterEnabled,
+                // The exported file carries no proxy password; keep ours when it is the same proxy.
+                proxy = if (imported.proxy.password.isBlank() && imported.proxy.host == current.proxy.host) {
+                    imported.proxy.copy(password = current.proxy.password)
+                } else {
+                    imported.proxy
+                },
                 firstRunDone = true,
             ),
         )
@@ -122,18 +146,30 @@ class BackupService(
         for (t in backup.torrents) {
             val data = t.resumeData?.let { runCatching { Base64Util.decode(it) }.getOrNull() }
             if (data != null) {
-                val added = runCatching { engine.addFromResumeData(data) }
+                val added = runCatching { engine.addFromResumeData(data, defaultSavePath()) }
                 if (added.isFailure && (added.exceptionOrNull() as? GraphiteException)?.error?.kind != ErrorKind.DUPLICATE) continue
             } else if (t.finalLocation == null) {
                 continue
             }
+            // Only Android folder locations are kept as an archive entry; they are shown, never deleted from here.
+            val finalLocation = t.finalLocation?.takeIf { it.startsWith("content://") }
+            if (data == null && finalLocation == null) continue
             meta.restore(
-                Torrent(t.id, t.name, t.category, t.addedAt, t.completedAt, t.savePath, t.finalLocation, t.totalSize, t.source),
+                Torrent(t.id, t.name, t.category, t.addedAt, t.completedAt, t.savePath, finalLocation, t.totalSize, t.source),
                 t.tags,
             )
             restored++
         }
         eventLog.log(EventType.SETTINGS_IMPORTED, restored.toString())
-        return restored
+        restored
+    }
+
+    /** [candidate] when it is an existing local folder or an Android folder URI, otherwise [fallback]. */
+    private fun localFolderOr(candidate: String, fallback: String): String = when {
+        candidate.isBlank() -> candidate
+        candidate.startsWith("content://") -> candidate
+        candidate.startsWith("\\\\") || candidate.startsWith("//") -> fallback
+        File(candidate).let { it.isAbsolute && it.isDirectory } -> candidate
+        else -> fallback
     }
 }

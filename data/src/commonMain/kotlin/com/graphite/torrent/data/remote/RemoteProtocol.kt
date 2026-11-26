@@ -37,26 +37,32 @@ class RemoteCrypto(key: ByteArray) {
     private val secret = SecretKeySpec(key, "AES")
     private val random = SecureRandom()
 
-    fun seal(plain: ByteArray): Envelope {
+    fun seal(plain: ByteArray, aad: ByteArray): Envelope {
         val nonce = ByteArray(12).also(random::nextBytes)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, secret, GCMParameterSpec(128, nonce))
-        cipher.updateAAD(AAD)
+        cipher.updateAAD(aad)
         return Envelope(Base64Util.encodeUrl(nonce), Base64Util.encodeUrl(cipher.doFinal(plain)))
     }
 
     /** Throws [GraphiteException] with [ErrorKind.REMOTE_AUTH] when the message was not made with our key. */
-    fun open(envelope: Envelope): ByteArray = try {
+    fun open(envelope: Envelope, aad: ByteArray): ByteArray = try {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.DECRYPT_MODE, secret, GCMParameterSpec(128, Base64Util.decodeUrl(envelope.n)))
-        cipher.updateAAD(AAD)
+        cipher.updateAAD(aad)
         cipher.doFinal(Base64Util.decodeUrl(envelope.c))
     } catch (e: Exception) {
         throw GraphiteException(ErrorKind.REMOTE_AUTH, "message authentication failed", e)
     }
 
     companion object {
-        private val AAD = "graphite-remote-v1".toByteArray()
+        private const val VERSION = "graphite-remote-v2"
+
+        /** Requests and responses use different associated data, so one can never be passed off as the other. */
+        val REQUEST_AAD: ByteArray = "$VERSION|req".toByteArray()
+
+        /** A response only verifies for the request it answers: a recorded "ok" cannot be replayed for another call. */
+        fun responseAad(requestId: String): ByteArray = "$VERSION|res|$requestId".toByteArray()
 
         fun newKey(): ByteArray = ByteArray(32).also(SecureRandom()::nextBytes)
     }

@@ -1,5 +1,7 @@
 package com.graphite.torrent.data.automation
 
+import com.graphite.torrent.core.net.SafeHttp
+import com.graphite.torrent.core.net.BoundedIo
 import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToList
 import com.graphite.torrent.core.controller.TorrentController
@@ -28,7 +30,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import java.net.HttpURLConnection
 import java.net.URI
 
 /** RSS feeds with rules that download matching items automatically. */
@@ -38,7 +39,8 @@ class RssService(
     private val controller: TorrentController,
     private val eventLog: EventLogRepository,
     private val scope: CoroutineScope,
-    private val fetcher: (String) -> ByteArray = ::httpGet,
+    /** Replaces the network in tests; null = real HTTP with size, time and address limits. */
+    private val fetcher: ((String) -> ByteArray)? = null,
     private val clock: () -> Long = System::currentTimeMillis,
 ) {
     private val q get() = db.rssQueries
@@ -113,7 +115,7 @@ class RssService(
 
     private suspend fun refreshFeed(id: Long, url: String, downloadNew: Boolean): Int {
         val parsed = try {
-            withContext(Dispatchers.IO) { RssParser.parse(fetcher(url)) }
+            withContext(Dispatchers.IO) { RssParser.parse(fetchFeed(url)) }
         } catch (e: Exception) {
             val error = ErrorMapper.fromException(e)
             withContext(Dispatchers.IO) { q.markFeedChecked(clock(), error.detail, id) }
@@ -138,7 +140,7 @@ class RssService(
                 val source = if (item.link.startsWith("magnet:")) {
                     AddSource.Magnet(item.link)
                 } else {
-                    AddSource.TorrentFile(Base64Util.encode(withContext(Dispatchers.IO) { fetcher(item.link) }))
+                    AddSource.TorrentFile(Base64Util.encode(withContext(Dispatchers.IO) { fetchTorrent(item.link, feedUrl = url) }))
                 }
                 controller.add(AddRequest(source, savePath = rule.savePath.ifBlank { null }, startPaused = rule.startPaused, category = rule.category))
                 withContext(Dispatchers.IO) { q.markItemDownloaded(id, item.guid) }
@@ -166,22 +168,28 @@ class RssService(
         for (r in rules) {
             q.insertRule(r.name, r.feedId?.let { idMap[it] }, r.include, r.exclude, r.useRegex, r.category, r.savePath, r.startPaused, r.enabled)
         }
+        // Like a feed added by hand: what is in the feed right now is only remembered, not downloaded.
+        for (f in feeds) {
+            val id = idMap[f.id] ?: continue
+            runCatching { mutex.withLock { refreshFeed(id, f.url, downloadNew = false) } }
+        }
     }
 
-    companion object {
-        fun httpGet(url: String): ByteArray {
-            val connection = URI(url).toURL().openConnection() as HttpURLConnection
-            try {
-                connection.connectTimeout = 15_000
-                connection.readTimeout = 20_000
-                connection.instanceFollowRedirects = true
-                connection.setRequestProperty("User-Agent", "Graphite")
-                val code = connection.responseCode
-                if (code !in 200..299) throw java.io.IOException("HTTP $code")
-                return connection.inputStream.use { it.readBytes() }
-            } finally {
-                connection.disconnect()
-            }
-        }
+    /** The feed address is typed in by the user, so a tracker proxy in the local network (Jackett, Prowlarr) is fine. */
+    private fun fetchFeed(url: String): ByteArray =
+        fetcher?.invoke(url) ?: SafeHttp.get(url, MAX_FEED_BYTES, allowPrivateHosts = true)
+
+    /**
+     * Links inside a feed are written by the feed: they may only point into the local network when the feed
+     * itself lives there, otherwise a public feed could make Graphite send requests to the router or the PC.
+     */
+    private fun fetchTorrent(link: String, feedUrl: String): ByteArray {
+        fetcher?.let { return it(link) }
+        val feedIsLocal = runCatching { SafeHttp.isPrivateHost(URI(feedUrl).host.orEmpty()) }.getOrDefault(false)
+        return SafeHttp.get(link, BoundedIo.MAX_TORRENT_BYTES, allowPrivateHosts = feedIsLocal)
+    }
+
+    private companion object {
+        const val MAX_FEED_BYTES = 8 * 1024 * 1024
     }
 }

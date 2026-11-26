@@ -1,8 +1,8 @@
 package com.graphite.torrent.core.trackers
 
+import com.graphite.torrent.core.net.SafeHttp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.net.HttpURLConnection
 import java.net.URI
 
 /** Parsing, validation and downloading of public tracker lists. */
@@ -52,21 +52,16 @@ object TrackerList {
             }
         }
         if (lists.isEmpty() && lastError != null) throw lastError
-        merge(*lists.toTypedArray())
+        merge(*lists.toTypedArray()).take(MAX_TRACKERS)
     }
 
-    internal fun httpGet(url: String, timeoutMs: Int): String {
-        val connection = URI(url).toURL().openConnection() as HttpURLConnection
-        try {
-            connection.connectTimeout = timeoutMs
-            connection.readTimeout = timeoutMs
-            connection.instanceFollowRedirects = true
-            connection.setRequestProperty("User-Agent", "Graphite")
-            val code = connection.responseCode
-            if (code !in 200..299) throw java.io.IOException("HTTP $code for $url")
-            return connection.inputStream.use { it.readBytes().toString(Charsets.UTF_8) }
-        } finally {
-            connection.disconnect()
-        }
-    }
+    internal fun httpGet(url: String, timeoutMs: Int): String =
+        // The source is typed in by the user, so a host in the local network is allowed.
+        SafeHttp.get(url, MAX_LIST_BYTES, totalTimeoutMs = timeoutMs * 3L, allowPrivateHosts = true, connectTimeoutMs = timeoutMs)
+            .toString(Charsets.UTF_8)
+
+    private const val MAX_LIST_BYTES = 1024 * 1024
+
+    /** More trackers than this only slow every announce down. */
+    const val MAX_TRACKERS = 200
 }

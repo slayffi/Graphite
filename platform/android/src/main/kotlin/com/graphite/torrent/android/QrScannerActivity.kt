@@ -106,7 +106,11 @@ class QrScannerActivity : ComponentActivity() {
     private fun bindCamera(previewView: PreviewView) {
         val future = ProcessCameraProvider.getInstance(this)
         future.addListener({
-            val provider = future.get()
+            // The camera can fail to start (in use, disabled by policy): close the scanner instead of crashing.
+            val provider = runCatching { future.get() }.getOrNull() ?: run {
+                finish()
+                return@addListener
+            }
             val preview = Preview.Builder().build().also { it.surfaceProvider = previewView.surfaceProvider }
             val analysis = ImageAnalysis.Builder()
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)

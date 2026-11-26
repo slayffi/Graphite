@@ -1,5 +1,6 @@
 package com.graphite.torrent.desktop
 
+import com.graphite.torrent.core.net.BoundedIo
 import com.graphite.torrent.core.util.MagnetLink
 import com.graphite.torrent.data.DatabaseFactory
 import com.graphite.torrent.data.FileSystemStorage
@@ -70,7 +71,9 @@ internal fun handleArguments(env: AppEnvironment, args: List<String>) {
             trimmed.startsWith("magnet:", ignoreCase = true) -> env.submit(IncomingRequest.Magnet(trimmed))
             trimmed.lowercase().endsWith(".torrent") -> {
                 val file = File(trimmed)
-                if (file.isFile) env.submit(IncomingRequest.TorrentFile(file.name, file.readBytes()))
+                // Capped: a huge file named *.torrent is not read into memory.
+                if (file.isFile) runCatching { BoundedIo.readFile(file, BoundedIo.MAX_TORRENT_BYTES) }.getOrNull()
+                    ?.let { env.submit(IncomingRequest.TorrentFile(file.name, it)) }
             }
             MagnetLink.findInText(trimmed) != null && !trimmed.startsWith("--") -> env.submit(IncomingRequest.Text(trimmed))
         }

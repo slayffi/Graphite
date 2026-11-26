@@ -28,6 +28,15 @@ object DesktopPaths {
     /** Folder with bundled resources of the installed app (Compose `appResourcesRootDir`). */
     val appResources: File? get() = System.getProperty("compose.application.resources.dir")?.let(::File)
 
+    /**
+     * Windows system programs are started by their full path: a bare "explorer.exe" is searched in the current
+     * folder first, which is the folder of a double-clicked .torrent and may hold a planted copy.
+     */
+    fun windowsProgram(name: String, system32: Boolean): String {
+        val root = System.getenv("SystemRoot")?.takeIf { it.isNotBlank() } ?: "C:\\Windows"
+        return if (system32) "$root\\System32\\$name" else "$root\\$name"
+    }
+
     /** Executable of the installed app (set by the jpackage launcher). */
     val executable: String? get() = System.getProperty("jpackage.app-path")
 }

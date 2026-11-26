@@ -29,6 +29,7 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
+import java.io.File
 import java.net.Inet4Address
 import java.net.InetAddress
 import java.util.concurrent.ConcurrentHashMap
@@ -66,10 +67,14 @@ class RemoteServer(
                 .collect { (enabled, port, key) ->
                     if (!enabled) {
                         stopServer()
-                    } else if (key.isBlank()) {
-                        settings.update { it.copy(remoteKeyBase64 = Base64Util.encodeUrl(RemoteCrypto.newKey())) }
                     } else {
-                        startServer(port, Base64Util.decodeUrl(key))
+                        // A missing or damaged key is replaced instead of silently breaking the feature.
+                        val bytes = runCatching { Base64Util.decodeUrl(key) }.getOrNull()?.takeIf { it.size == 32 }
+                        if (bytes == null) {
+                            settings.update { it.copy(remoteKeyBase64 = Base64Util.encodeUrl(RemoteCrypto.newKey())) }
+                        } else {
+                            startServer(port, bytes)
+                        }
                     }
                 }
         }
@@ -90,7 +95,8 @@ class RemoteServer(
     private fun startServer(port: Int, key: ByteArray) {
         stopServer()
         crypto = RemoteCrypto(key)
-        val s = MiniHttpServer(null, port, scope) { req, res -> handle(req, res) }
+        // Home network only: peers from the internet are dropped before a single byte is read.
+        val s = MiniHttpServer(null, port, scope, acceptPeer = MiniHttpServer::isLocalNetwork) { req, res -> handle(req, res) }
         try {
             s.start()
             server = s
@@ -125,7 +131,7 @@ class RemoteServer(
         val c = crypto ?: return res.text(503, "Unavailable", "")
         val request = try {
             val envelope = RemoteJson.decodeFromString(Envelope.serializer(), req.body.toString(Charsets.UTF_8))
-            RemoteJson.decodeFromString(RpcRequest.serializer(), c.open(envelope).toString(Charsets.UTF_8))
+            RemoteJson.decodeFromString(RpcRequest.serializer(), c.open(envelope, RemoteCrypto.REQUEST_AAD).toString(Charsets.UTF_8))
         } catch (_: Exception) {
             return res.text(403, "Forbidden", "")
         }
@@ -143,7 +149,7 @@ class RemoteServer(
         } catch (e: Exception) {
             RpcResponse(false, error = ErrorMapper.fromException(e))
         }
-        val sealed = c.seal(RemoteJson.encodeToString(RpcResponse.serializer(), response).toByteArray())
+        val sealed = c.seal(RemoteJson.encodeToString(RpcResponse.serializer(), response).toByteArray(), RemoteCrypto.responseAad(request.id))
         res.bytes(200, RemoteJson.encodeToString(Envelope.serializer(), sealed).toByteArray(), "application/json")
     }
 
@@ -172,12 +178,15 @@ class RemoteServer(
         }
         "previewMagnet" -> controller.previewMagnet(p.decode(UriParam.serializer()).uri).encode(com.graphite.torrent.core.model.TorrentMetadata.serializer())
         "previewTorrentFile" -> controller.previewTorrentFile(Base64Util.decode(p.decode(DataParam.serializer()).data)).encode(com.graphite.torrent.core.model.TorrentMetadata.serializer())
-        "add" -> controller.add(p.decode(AddRequest.serializer())).encode(String.serializer())
+        "add" -> p.decode(AddRequest.serializer()).let { request ->
+            requireKnownFolder(request.savePath)
+            controller.add(request).encode(String.serializer())
+        }
         "pause" -> unit { controller.pause(p.decode(IdsParam.serializer()).ids) }
         "resume" -> unit { controller.resume(p.decode(IdsParam.serializer()).ids) }
         "remove" -> unit { p.decode(IdsParam.serializer()).let { controller.remove(it.ids, it.deleteFiles) } }
         "recheck" -> unit { controller.recheck(p.decode(IdParam.serializer()).id) }
-        "move" -> unit { p.decode(MoveParam.serializer()).let { controller.move(it.id, it.target) } }
+        "move" -> unit { p.decode(MoveParam.serializer()).let { requireKnownFolder(it.target); controller.move(it.id, it.target) } }
         "setFilePriorities" -> unit { p.decode(PrioritiesParam.serializer()).let { controller.setFilePriorities(it.id, it.priorities) } }
         "setSequential" -> unit { p.decode(FlagParam.serializer()).let { controller.setSequential(it.id, it.enabled) } }
         "setQueuePosition" -> unit { p.decode(PositionParam.serializer()).let { controller.setQueuePosition(it.id, it.position) } }
@@ -192,9 +201,29 @@ class RemoteServer(
         "pieces" -> controller.pieces(p.decode(IdParam.serializer()).id).encode(PieceMapSnapshot.serializer())
         "pauseAll" -> unit { controller.pauseAll() }
         "resumeAll" -> unit { controller.resumeAll() }
-        "freeSpace" -> controller.freeSpace(p.decode(PathParam.serializer()).path).encode(Long.serializer())
+        "freeSpace" -> p.decode(PathParam.serializer()).path.let { requireKnownFolder(it); controller.freeSpace(it) }.encode(Long.serializer())
         "defaultSavePath" -> controller.defaultSavePath().encode(String.serializer())
         else -> throw GraphiteException(TorrentError(ErrorKind.UNKNOWN, "unknown method $method"))
+    }
+
+    /**
+     * The phone may only name folders this PC already downloads into (the default folder, the "move completed"
+     * folder, folders of existing downloads) or folders below them. Otherwise a leaked pairing code would be
+     * enough to write files anywhere, for example into the autostart folder.
+     */
+    private suspend fun requireKnownFolder(path: String?) {
+        if (path.isNullOrBlank()) return
+        val s = settings.current()
+        val roots = buildList {
+            add(controller.defaultSavePath())
+            add(s.defaultSavePath)
+            add(s.moveCompletedTo)
+            controller.torrents.value.forEach { add(it.savePath) }
+        }.filter { it.isNotBlank() }.mapNotNull { runCatching { File(it).canonicalFile.toPath() }.getOrNull() }
+        val target = runCatching { File(path).takeIf { it.isAbsolute }?.canonicalFile?.toPath() }.getOrNull()
+        if (target == null || roots.none { target.startsWith(it) }) {
+            throw GraphiteException(ErrorKind.PERMISSION_DENIED, "folder is not allowed for remote control: $path")
+        }
     }
 
     private suspend fun unit(block: suspend () -> Unit): JsonElement {

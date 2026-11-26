@@ -115,6 +115,8 @@ class MainActivity : ComponentActivity(), BridgeHost {
     /** magnet: links, .torrent files and shared text or files. */
     private fun handleIntent(intent: Intent?) {
         intent ?: return
+        // In safe mode (showing an error report) there are no services to hand the request to.
+        if (!app.ready) return
         val env = app.env
         when (intent.action) {
             Intent.ACTION_VIEW -> {
@@ -134,12 +136,15 @@ class MainActivity : ComponentActivity(), BridgeHost {
                 }
             }
             Intent.ACTION_SEND_MULTIPLE -> {
-                val uris = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java)
-                } else {
-                    @Suppress("DEPRECATION")
-                    intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM)
-                }
+                // Extras come from another app and may hold anything: a malformed list is ignored, not fatal.
+                val uris = runCatching {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)
+                    }
+                }.getOrNull()?.take(MAX_SHARED_FILES)
                 lifecycleScope.launch {
                     uris.orEmpty().forEach { uri -> app.platform.readIncoming(uri)?.let { env.submit(IncomingRequest.TorrentFile(it.name, it.bytes)) } }
                 }
@@ -148,13 +153,14 @@ class MainActivity : ComponentActivity(), BridgeHost {
         }
     }
 
-    private fun streamExtra(intent: Intent): Uri? =
+    private fun streamExtra(intent: Intent): Uri? = runCatching {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
         } else {
             @Suppress("DEPRECATION")
-            intent.getParcelableExtra(Intent.EXTRA_STREAM)
+            intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
         }
+    }.getOrNull()
 
     // ---------------------------------------------------------------- BridgeHost
 
@@ -211,6 +217,7 @@ class MainActivity : ComponentActivity(), BridgeHost {
     companion object {
         const val ACTION_ADD = "com.graphite.torrent.ADD"
         private const val HEALTHY_AFTER_MS = 3_000L
+        private const val MAX_SHARED_FILES = 50
         private const val UI_TIMEOUT_MS = 20_000L
     }
 }

@@ -110,7 +110,7 @@ class GraphiteServices(
             val scheduler = SchedulerService(database, settings, controller, eventLog, scope)
             val rss = RssService(database, settings, controller, eventLog, scope)
             val watchFolder = WatchFolderService(settings, controller, eventLog, scope, watchSources)
-            val backup = BackupService(engine, settings, meta, scheduler, rss, eventLog)
+            val backup = BackupService(engine, settings, meta, scheduler, rss, eventLog, defaultSavePath = { controller.defaultSavePath() })
             return GraphiteServices(
                 scope, dataDir, database, settings, engine, meta, stats, eventLog, history, storage, controller,
                 switchable = SwitchableTorrentController(controller, scope),

@@ -1,5 +1,6 @@
 package com.graphite.torrent.desktop
 
+import com.graphite.torrent.core.net.BoundedIo
 import java.io.File
 import java.io.RandomAccessFile
 import java.net.InetAddress
@@ -7,6 +8,8 @@ import java.net.ServerSocket
 import java.net.Socket
 import java.nio.channels.FileChannel
 import java.nio.channels.FileLock
+import java.security.MessageDigest
+import java.security.SecureRandom
 import kotlin.concurrent.thread
 
 /**
@@ -27,19 +30,28 @@ class SingleInstance(private val dir: File) {
         return lock != null
     }
 
-    /** Starts listening for arguments from later launches. */
+    /**
+     * Starts listening for arguments from later launches. The port and a random token are written to a file
+     * in the user's own data folder, so only this user's processes can talk to the running instance.
+     */
     fun listen(onArgs: (List<String>) -> Unit) {
         val socket = ServerSocket(0, 8, InetAddress.getLoopbackAddress())
         server = socket
-        File(dir, "instance.port").writeText(socket.localPort.toString())
+        val token = ByteArray(16).also { SecureRandom().nextBytes(it) }.joinToString("") { "%02x".format(it) }
+        File(dir, "instance.port").writeText("${socket.localPort}\n$token")
+        val expected = "$MAGIC $token".toByteArray()
         thread(name = "graphite-ipc", isDaemon = true) {
             while (!socket.isClosed) {
                 val client = runCatching { socket.accept() }.getOrNull() ?: continue
                 runCatching {
                     client.use { c ->
                         c.soTimeout = 3000
-                        val lines = c.getInputStream().bufferedReader(Charsets.UTF_8).readLines()
-                        if (lines.firstOrNull() == MAGIC) onArgs(lines.drop(1))
+                        // Bounded in size and time: a stuck or endless sender must not block later launches.
+                        val text = BoundedIo.read(c.getInputStream(), MAX_MESSAGE_BYTES, System.currentTimeMillis() + 3000)
+                            .toString(Charsets.UTF_8)
+                        val lines = text.lines().filter { it.isNotEmpty() }.take(MAX_ARGUMENTS + 1)
+                        val first = lines.firstOrNull()?.toByteArray() ?: return@use
+                        if (MessageDigest.isEqual(first, expected)) onArgs(lines.drop(1))
                     }
                 }
             }
@@ -48,12 +60,12 @@ class SingleInstance(private val dir: File) {
 
     /** Sends arguments to the primary instance. Returns false when it could not be reached. */
     fun forward(args: List<String>): Boolean = runCatching {
-        val port = File(dir, "instance.port").readText().trim().toInt()
+        val (port, token) = File(dir, "instance.port").readText().trim().lines().let { it[0].toInt() to it.getOrElse(1) { "" } }
         Socket(InetAddress.getLoopbackAddress(), port).use { s ->
             s.getOutputStream().bufferedWriter(Charsets.UTF_8).use { w ->
-                w.write(MAGIC)
+                w.write("$MAGIC $token")
                 w.newLine()
-                args.forEach { w.write(it); w.newLine() }
+                args.take(MAX_ARGUMENTS).forEach { w.write(it); w.newLine() }
             }
         }
         true
@@ -66,6 +78,8 @@ class SingleInstance(private val dir: File) {
     }
 
     private companion object {
-        const val MAGIC = "GRAPHITE-IPC-1"
+        const val MAGIC = "GRAPHITE-IPC-2"
+        const val MAX_MESSAGE_BYTES = 256 * 1024
+        const val MAX_ARGUMENTS = 64
     }
 }

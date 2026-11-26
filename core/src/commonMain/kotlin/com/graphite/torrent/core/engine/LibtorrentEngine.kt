@@ -838,7 +838,7 @@ class LibtorrentEngine(
             id
         }
 
-    override suspend fun addFromResumeData(data: ByteArray): String = withContext(Dispatchers.IO) {
+    override suspend fun addFromResumeData(data: ByteArray, safeRoot: String): String = withContext(Dispatchers.IO) {
         if (scope == null) throw GraphiteException(ErrorKind.UNKNOWN, "engine is not running")
         val ec = error_code()
         val swigParams = libtorrent.read_resume_data_ex(Vectors.bytes2byte_vector(data), ec)
@@ -846,7 +846,15 @@ class LibtorrentEngine(
         val params = AddTorrentParams(swigParams)
         val id = idOfParams(params) ?: throw GraphiteException(ErrorKind.INVALID_TORRENT, "no info hash")
         if (handles.containsKey(id)) throw GraphiteException(ErrorKind.DUPLICATE, params.getName())
-        File(params.getSavePath()).mkdirs()
+        val root = File(safeRoot).apply { mkdirs() }
+        val stored = File(params.getSavePath())
+        // Network shares (\\host\share) and folders that do not exist here are not taken from the file.
+        val usable = stored.isAbsolute && !params.getSavePath().startsWith("\\\\") && stored.isDirectory
+        if (!usable) params.setSavePath(root.absolutePath)
+        val insideRoot = runCatching { File(params.getSavePath()).canonicalFile.toPath().startsWith(root.canonicalFile.toPath()) }.getOrDefault(false)
+        if (!insideRoot) {
+            params.setFlags(params.getFlags().and_(TorrentFlags.AUTO_MANAGED.inv()).or_(TorrentFlags.PAUSED))
+        }
         cache.getOrPut(id) { CachedInfo() }.apply {
             this.savePath = params.getSavePath()
             name = params.getName()
@@ -858,7 +866,7 @@ class LibtorrentEngine(
         id
     }
 
-    override fun resumeData(id: String): ByteArray? = resumeStore.loadAll()[id]
+    override fun resumeData(id: String): ByteArray? = resumeStore.load(id)
 
     private fun decodeBase64(text: String): ByteArray = try {
         Base64Util.decode(text)

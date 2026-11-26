@@ -11,6 +11,9 @@ interface ResumeStore {
     fun delete(id: String)
     fun loadAll(): Map<String, ByteArray>
 
+    /** One entry, without reading all the others. */
+    fun load(id: String): ByteArray? = loadAll()[id]
+
     /** Moves an unreadable entry aside so it is not retried on every start. */
     fun quarantine(id: String)
 }
@@ -49,6 +52,9 @@ class FileResumeStore(private val dir: File) : ResumeStore {
     }
 
     @Synchronized
+    override fun load(id: String): ByteArray? =
+        runCatching { fileFor(id).takeIf { it.isFile }?.readBytes()?.takeIf { it.isNotEmpty() } }.getOrNull()
+
     override fun loadAll(): Map<String, ByteArray> {
         val files = dir.listFiles { f -> f.isFile && f.name.endsWith(".resume") } ?: return emptyMap()
         val result = LinkedHashMap<String, ByteArray>()

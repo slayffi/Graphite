@@ -78,8 +78,9 @@ class DesktopPlatformServices(private val ownerProvider: () -> Frame?) : Platfor
         val f = File(path)
         runCatching {
             if (DesktopPaths.isWindows) {
-                if (f.isFile) ProcessBuilder("explorer.exe", "/select,", f.absolutePath).start()
-                else ProcessBuilder("explorer.exe", f.absolutePath).start()
+                val explorer = DesktopPaths.windowsProgram("explorer.exe", system32 = false)
+                if (f.isFile) ProcessBuilder(explorer, "/select,", f.absolutePath).start()
+                else ProcessBuilder(explorer, f.absolutePath).start()
             } else {
                 Desktop.getDesktop().open(if (f.isDirectory) f else f.parentFile)
             }

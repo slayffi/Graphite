@@ -1,5 +1,8 @@
 package com.graphite.torrent.data.remote
 
+import kotlinx.coroutines.CancellationException
+import com.graphite.torrent.core.net.BoundedIo
+import com.graphite.torrent.core.engine.ErrorMapper
 import com.graphite.torrent.core.controller.ControllerNotice
 import com.graphite.torrent.core.controller.TorrentController
 import com.graphite.torrent.core.model.AddRequest
@@ -81,9 +84,13 @@ class RemoteTorrentController(
                     noticeSeq = snap.noticeSeq
                     _connected.value = true
                     _lastError.value = null
-                } catch (e: GraphiteException) {
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    // Whatever answers at that address (another network, a newer or older PC version) must not
+                    // stop the polling: show "not reachable" and keep trying.
                     _connected.value = false
-                    _lastError.value = e.error
+                    _lastError.value = (e as? GraphiteException)?.error ?: ErrorMapper.fromException(e)
                     _session.value = _session.value.copy(running = false, downloadRate = 0, uploadRate = 0)
                 }
                 delay(if (_connected.value) 1000 else 3000)
@@ -110,14 +117,20 @@ class RemoteTorrentController(
 
     private suspend fun rawCall(method: String, params: JsonElement, timeoutMs: Int): JsonElement = withContext(Dispatchers.IO) {
         val request = RpcRequest(clock(), UUID.randomUUID().toString(), method, params)
-        val body = RemoteJson.encodeToString(Envelope.serializer(), crypto.seal(RemoteJson.encodeToString(RpcRequest.serializer(), request).toByteArray()))
+        val body = RemoteJson.encodeToString(
+            Envelope.serializer(),
+            crypto.seal(RemoteJson.encodeToString(RpcRequest.serializer(), request).toByteArray(), RemoteCrypto.REQUEST_AAD),
+        )
         var lastFailure: Exception? = null
         for (candidate in listOf(host) + pairing.hosts.filter { it != host }) {
             try {
                 val text = post(candidate, body, timeoutMs)
                 host = candidate
                 val envelope = RemoteJson.decodeFromString(Envelope.serializer(), text)
-                val response = RemoteJson.decodeFromString(RpcResponse.serializer(), crypto.open(envelope).toString(Charsets.UTF_8))
+                val response = RemoteJson.decodeFromString(
+                    RpcResponse.serializer(),
+                    crypto.open(envelope, RemoteCrypto.responseAad(request.id)).toString(Charsets.UTF_8),
+                )
                 if (!response.ok) throw GraphiteException(response.error ?: TorrentError(ErrorKind.UNKNOWN))
                 return@withContext response.result
             } catch (e: GraphiteException) {
@@ -137,12 +150,15 @@ class RemoteTorrentController(
             connection.connectTimeout = 4000
             connection.readTimeout = timeoutMs
             connection.doOutput = true
+            // Only the paired PC is spoken to: a redirect elsewhere is an error, not something to follow.
+            connection.instanceFollowRedirects = false
             connection.setRequestProperty("Content-Type", "application/json")
             connection.outputStream.use { it.write(body.toByteArray()) }
             val code = connection.responseCode
             if (code == 403) throw GraphiteException(ErrorKind.REMOTE_AUTH, "rejected by ${pairing.name}")
             if (code != 200) throw IOException("HTTP $code")
-            return connection.inputStream.use { it.readBytes().toString(Charsets.UTF_8) }
+            return connection.inputStream.use { BoundedIo.read(it, MAX_RESPONSE_BYTES, System.currentTimeMillis() + timeoutMs * 2L) }
+                .toString(Charsets.UTF_8)
         } finally {
             connection.disconnect()
         }
@@ -186,4 +202,9 @@ class RemoteTorrentController(
 
     /** Pause rules of the phone never pause the PC. */
     override fun setPauseReason(reason: PauseReason, active: Boolean) = Unit
+
+    private companion object {
+        /** A snapshot of several hundred downloads is a few megabytes at most. */
+        const val MAX_RESPONSE_BYTES = 32 * 1024 * 1024
+    }
 }

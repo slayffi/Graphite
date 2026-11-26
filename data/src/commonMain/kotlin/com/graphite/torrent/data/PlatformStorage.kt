@@ -5,6 +5,8 @@ import com.graphite.torrent.core.model.FileEntry
 import com.graphite.torrent.core.model.GraphiteException
 import com.graphite.torrent.core.model.TorrentItem
 import com.graphite.torrent.core.settings.AppSettings
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import java.io.File
 
 /** What should happen to the files of a torrent that just completed. */
@@ -64,9 +66,14 @@ interface PlatformStorage {
      */
     fun needsRelocation(item: TorrentItem, settings: AppSettings): Boolean = false
 
+    /** Copy progress (0..1) of downloads that [afterCompletion] is relocating right now, by torrent id. */
+    val relocationProgress: StateFlow<Map<String, Float>> get() = NO_PROGRESS
+
     /** Deletes files at a location produced by [CompletionResult.Relocated]. */
     suspend fun deleteRelocated(location: String, files: List<String>) {}
 }
+
+private val NO_PROGRESS: StateFlow<Map<String, Float>> = MutableStateFlow(emptyMap())
 
 /** Plain file system storage used on desktop and in tests. */
 open class FileSystemStorage(private val defaultDir: String) : PlatformStorage {

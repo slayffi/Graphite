@@ -85,8 +85,14 @@ interface TorrentEngine {
     /** Asks libtorrent to fetch these pieces first (streaming). */
     fun prioritizePieces(id: String, pieces: IntRange, deadlineMs: Int)
 
-    /** Re-adds a torrent from exported resume data (backup import). Returns its id. */
-    suspend fun addFromResumeData(data: ByteArray): String
+    /**
+     * Re-adds a torrent from exported resume data (backup import). Returns its id.
+     *
+     * The backup file is not trusted blindly: the folder stored in it is used only when it is an existing
+     * local folder, otherwise [safeRoot]; and a torrent whose folder lies outside [safeRoot] is added paused,
+     * so importing a file cannot by itself start writing into arbitrary folders.
+     */
+    suspend fun addFromResumeData(data: ByteArray, safeRoot: String): String
 
     /** Current resume data of a torrent, for backups; null when unknown. */
     fun resumeData(id: String): ByteArray?

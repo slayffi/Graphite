@@ -134,7 +134,7 @@ object PowerActions {
     /** Shuts down in 60 seconds so the user can still cancel with "shutdown /a". */
     fun shutdown(message: String) {
         runCatching {
-            if (DesktopPaths.isWindows) ProcessBuilder("shutdown.exe", "/s", "/t", "60", "/c", message).start()
+            if (DesktopPaths.isWindows) ProcessBuilder(DesktopPaths.windowsProgram("shutdown.exe", system32 = true), "/s", "/t", "60", "/c", message).start()
             else ProcessBuilder("shutdown", "-h", "+1").start()
         }
     }
