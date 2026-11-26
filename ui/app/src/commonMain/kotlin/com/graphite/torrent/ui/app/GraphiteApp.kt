@@ -92,11 +92,14 @@ fun GraphiteApp(
     navigator: Navigator = remember { Navigator() },
     showSplash: Boolean = true,
     extraScreens: @Composable (destination: Destination, onBack: () -> Unit) -> Boolean = { _, _ -> false },
+    /** Called once the splash is gone and the real screens are visible (startup diagnostics). */
+    onContentShown: () -> Unit = {},
 ) {
     val settings by env.settings.settings.collectAsStateWithLifecycle()
     GraphiteTheme(amoled = settings.amoledBlack, reduceMotion = settings.reduceMotion, units = currentUnitLabels()) {
         ProvideViewModelStore {
             var splashDone by remember { mutableStateOf(!showSplash) }
+            LaunchedEffect(splashDone) { if (splashDone) onContentShown() }
             Box(Modifier.fillMaxSize().background(GraphiteTheme.colors.bg)) {
                 AppContent(env, navigator, extraScreens)
                 AnimatedVisibility(!splashDone, enter = fadeIn(), exit = fadeOut(tween(GraphiteTheme.motion.duration(300)))) {

@@ -6,6 +6,7 @@ import android.content.Context
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.Process
 import android.os.SystemClock
 import androidx.annotation.RequiresApi
 import com.graphite.torrent.BuildConfig
@@ -33,7 +34,8 @@ object StartupGuard {
     private const val ACK = "startup-ack.txt"
     private const val HEALTHY = "HEALTHY"
     private const val EXCEPTION = "EXCEPTION"
-    private const val HANG_MS = 5_000L
+    const val SAFE_MODE = "safe mode"
+    private const val HANG_MS = 6_000L
     private const val WATCH_ROUNDS = 60
 
     private val lock = Any()
@@ -46,7 +48,8 @@ object StartupGuard {
         dir = files
         val marker = File(files, MARKER)
         val previous = runCatching { marker.takeIf { it.exists() }?.readText() }.getOrNull()
-        val previousFailed = previous != null && (HEALTHY !in previous || EXCEPTION in previous)
+        // A safe-mode start only shows the report: it never becomes "healthy" but is not a failure.
+        val previousFailed = previous != null && SAFE_MODE !in previous && (HEALTHY !in previous || EXCEPTION in previous)
         val exit = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) runCatching { lastAbnormalExit(context, lastAck(files)) }.getOrNull() else null
 
         val report = if (previousFailed || exit != null) buildReport(context, previous, exit) else null
@@ -69,13 +72,23 @@ object StartupGuard {
                 if (!answered.await(HANG_MS, TimeUnit.MILLISECONDS)) {
                     val dump = threadDump()
                     append("$EXCEPTION: main thread did not respond for $HANG_MS ms\n$dump")
+                    // Try to show the report now; firmwares that block it get it on the next start.
+                    // The frozen process is ended either way so the user is not left on a splash screen.
                     val steps = runCatching { dir?.let { File(it, MARKER).readText() } }.getOrNull()
-                    CrashReporter.showFrom(context, buildReport(context, steps, null))
+                    runCatching { CrashReporter.showFrom(context, buildReport(context, steps, null)) }
+                    Thread.sleep(2_000)
+                    Process.killProcess(Process.myPid())
                     return@thread
                 }
                 Thread.sleep(1_000)
             }
         }
+    }
+
+    /** Report about the current start (steps so far and where every thread is), for a start that is stuck. */
+    fun reportNow(context: Context): String {
+        val steps = runCatching { dir?.let { File(it, MARKER).readText() } }.getOrNull()
+        return buildReport(context, steps, null) + "\n== Threads ==\n" + threadDump()
     }
 
     private fun threadDump(): String = buildString {

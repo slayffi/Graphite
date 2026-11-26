@@ -5,7 +5,6 @@ import android.graphics.Color
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.os.Process
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.SystemBarStyle
@@ -18,7 +17,9 @@ import com.graphite.torrent.ui.app.GraphiteApp
 import com.graphite.torrent.ui.app.IncomingRequest
 import com.graphite.torrent.ui.app.navigation.Navigator
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity(), BridgeHost {
@@ -43,11 +44,10 @@ class MainActivity : ComponentActivity(), BridgeHost {
         )
         super.onCreate(savedInstanceState)
         app.safeModeReport?.let { report ->
-            // The previous start failed: show why instead of failing again, then end this process so the
-            // next start is a clean one.
-            CrashReporter.showFrom(this, report)
-            finishAffinity()
-            window.decorView.postDelayed({ Process.killProcess(Process.myPid()) }, 300)
+            // The previous start failed: show why, right here (no other process or activity is needed,
+            // some firmwares block those), instead of failing again.
+            StartupGuard.acknowledge(this)
+            ReportScreen.show(this, report)
             return
         }
         StartupGuard.step("activity")
@@ -63,17 +63,35 @@ class MainActivity : ComponentActivity(), BridgeHost {
             }
         })
 
-        setContent { GraphiteApp(app.env, navigator) }
+        setContent { GraphiteApp(app.env, navigator, onContentShown = ::onContentShown) }
         window.decorView.post { StartupGuard.step("first frame posted") }
         lifecycleScope.launch {
             StartupGuard.step("ui")
-            // A start that shows the UI and keeps running for a few seconds counts as good.
-            delay(HEALTHY_AFTER_MS)
-            StartupGuard.healthy()
+            // The main thread works but the screens never appeared: replace them with the report.
+            delay(UI_TIMEOUT_MS)
+            if (!contentShown) {
+                StartupGuard.step("screens did not appear in ${UI_TIMEOUT_MS / 1000} s")
+                val report = withContext(Dispatchers.IO) { StartupGuard.reportNow(this@MainActivity) }
+                StartupGuard.acknowledge(this@MainActivity)
+                ReportScreen.show(this@MainActivity, report)
+            }
         }
 
         lifecycleScope.launch { app.exitRequests.collect { finishAndRemoveTask() } }
         if (savedInstanceState == null) handleIntent(intent)
+    }
+
+    private var contentShown = false
+
+    private fun onContentShown() {
+        if (contentShown) return
+        contentShown = true
+        StartupGuard.step("screens shown")
+        // A start that shows the screens and keeps running for a few seconds counts as good.
+        lifecycleScope.launch {
+            delay(HEALTHY_AFTER_MS)
+            StartupGuard.healthy()
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -192,6 +210,7 @@ class MainActivity : ComponentActivity(), BridgeHost {
 
     companion object {
         const val ACTION_ADD = "com.graphite.torrent.ADD"
-        private const val HEALTHY_AFTER_MS = 8_000L
+        private const val HEALTHY_AFTER_MS = 3_000L
+        private const val UI_TIMEOUT_MS = 20_000L
     }
 }

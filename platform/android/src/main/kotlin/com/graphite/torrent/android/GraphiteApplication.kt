@@ -60,7 +60,7 @@ class GraphiteApplication : Application() {
         if (safeModeReport == null) StartupGuard.watchMainThread(this)
         if (safeModeReport != null) {
             // The previous start failed: MainActivity shows the report instead of starting the engine again.
-            StartupGuard.step("safe mode: showing the report")
+            StartupGuard.step(StartupGuard.SAFE_MODE)
             return
         }
         Notifications.createChannels(this)
