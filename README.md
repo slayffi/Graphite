@@ -9,6 +9,7 @@ Zero upload by default. No ads, no analytics, no data collection.</p>
   <a href="https://github.com/slayffi/Graphite/releases/latest"><img src="https://img.shields.io/github/v/release/slayffi/Graphite?label=release&color=c8c8cc&labelColor=141416" alt="Latest release"></a>
   <a href="https://github.com/slayffi/Graphite/actions/workflows/build.yml"><img src="https://github.com/slayffi/Graphite/actions/workflows/build.yml/badge.svg" alt="Build"></a>
   <img src="https://img.shields.io/badge/platforms-Windows%2010%2F11%20%C2%B7%20Android%208%2B-c8c8cc?labelColor=141416" alt="Windows 10/11, Android 8+">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/licence-GPL--3.0-c8c8cc?labelColor=141416" alt="Licence: GPL-3.0"></a>
 </p>
 
 <p align="center"><b>English</b> · <a href="README.ru.md">Русский</a></p>
@@ -220,8 +221,10 @@ Turbo takes the whole connection and opens many peers at once. If the rest of yo
 
 ## Third-party components
 
-[libtorrent](https://libtorrent.org) (BSD-3-Clause) through [libtorrent4j](https://github.com/aldenml/libtorrent4j) (MIT), Kotlin and kotlinx (Apache-2.0), Compose Multiplatform and AndroidX including Media3 and Glance (Apache-2.0), SQLDelight (Apache-2.0), Okio (Apache-2.0), ZXing (Apache-2.0), JNA (Apache-2.0 / LGPL-2.1), the Inter and JetBrains Mono fonts (OFL-1.1), Lucide icons (ISC), and libVLC (LGPL-2.1+) in the Windows installers. Some VLC plugins are distributed under GPL-2.0+. Licence texts are in [`licenses/`](licenses) and [`THIRD-PARTY-NOTICES.txt`](THIRD-PARTY-NOTICES.txt).
+[libtorrent](https://libtorrent.org) (BSD-3-Clause) through [libtorrent4j](https://github.com/aldenml/libtorrent4j) (MIT), Kotlin and kotlinx (Apache-2.0), Compose Multiplatform and AndroidX including Media3 and Glance (Apache-2.0), SQLDelight (Apache-2.0), Okio (Apache-2.0), ZXing (Apache-2.0), JNA (Apache-2.0 / LGPL-2.1), the Inter and JetBrains Mono fonts (OFL-1.1), Lucide icons (ISC), and libVLC (LGPL-2.1+) in the Windows installers. Some of the bundled VLC plugins are distributed under GPL-2.0-or-later, which is compatible with Graphite's own licence. Licence texts are in [`licenses/`](licenses) and [`THIRD-PARTY-NOTICES.txt`](THIRD-PARTY-NOTICES.txt).
 
 ## Licence
 
-No licence has been chosen for Graphite itself yet. Until one is added, the source is published for reading and all rights are reserved by the author.
+Graphite is free software, released under the [GNU General Public License, version 3](LICENSE). You may use, study, share and change it; if you distribute a changed version, it has to stay under the same licence with its source available. It comes with no warranty.
+
+Copyright © 2026 Graphite contributors.

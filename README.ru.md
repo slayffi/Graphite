@@ -177,6 +177,10 @@ testing              фейковый движок для тестов data и U
 
 ## Сторонние компоненты
 
-[libtorrent](https://libtorrent.org) (BSD-3-Clause) через [libtorrent4j](https://github.com/aldenml/libtorrent4j) (MIT), Kotlin и kotlinx (Apache-2.0), Compose Multiplatform и AndroidX, включая Media3 и Glance (Apache-2.0), SQLDelight (Apache-2.0), Okio (Apache-2.0), ZXing (Apache-2.0), JNA (Apache-2.0 / LGPL-2.1), шрифты Inter и JetBrains Mono (OFL-1.1), иконки Lucide (ISC), libVLC (LGPL-2.1+, в MSI; часть плагинов VLC распространяется под GPL-2.0+ — проверьте это, если будете распространять Graphite под несовместимой лицензией, или уберите такие плагины). Тексты лицензий — в [`licenses/`](licenses) и [`THIRD-PARTY-NOTICES.txt`](THIRD-PARTY-NOTICES.txt).
+[libtorrent](https://libtorrent.org) (BSD-3-Clause) через [libtorrent4j](https://github.com/aldenml/libtorrent4j) (MIT), Kotlin и kotlinx (Apache-2.0), Compose Multiplatform и AndroidX, включая Media3 и Glance (Apache-2.0), SQLDelight (Apache-2.0), Okio (Apache-2.0), ZXing (Apache-2.0), JNA (Apache-2.0 / LGPL-2.1), шрифты Inter и JetBrains Mono (OFL-1.1), иконки Lucide (ISC), libVLC (LGPL-2.1+, в установщиках Windows; часть плагинов VLC распространяется под GPL-2.0+, что совместимо с лицензией самого Graphite). Тексты лицензий — в [`licenses/`](licenses) и [`THIRD-PARTY-NOTICES.txt`](THIRD-PARTY-NOTICES.txt).
 
-Лицензия самого Graphite не выбрана — это решение владельца репозитория.
+## Лицензия
+
+Graphite — свободная программа под [GNU General Public License версии 3](LICENSE). Её можно использовать, изучать, распространять и изменять; изменённую версию при распространении нужно оставить под той же лицензией и с открытым исходным кодом. Гарантий нет.
+
+© 2026 авторы Graphite.
