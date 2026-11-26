@@ -93,4 +93,10 @@ interface TorrentEngine {
 
     fun setIpFilter(ranges: List<IpRange>)
     suspend fun saveAllResumeData()
+
+    /**
+     * Writes everything the engine still holds in memory for this torrent to disk and closes its files.
+     * Must be called before the files are read by something else (copying a finished download).
+     */
+    suspend fun flush(id: String)
 }

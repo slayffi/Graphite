@@ -105,8 +105,11 @@ class LocalTorrentController(
     override val speedHistory: StateFlow<List<SpeedSample>> = _speed.asStateFlow()
     override val notices: SharedFlow<ControllerNotice> = _notices.asSharedFlow()
 
+    /** Completed downloads whose files are being copied to their final folder right now. */
+    private val relocating = MutableStateFlow<Set<String>>(emptySet())
+
     override val torrents: StateFlow<List<TorrentItem>> =
-        combine(engine.torrents, meta.rows, meta.tags) { live, rows, tags -> merge(live, rows, tags) }
+        combine(engine.torrents, meta.rows, meta.tags, relocating) { live, rows, tags, moving -> merge(live, rows, tags, moving) }
             .stateIn(scope, SharingStarted.Eagerly, emptyList())
 
     val runtimeOverrides: StateFlow<RuntimeOverrides> = overrides.asStateFlow()
@@ -192,11 +195,18 @@ class LocalTorrentController(
     // List merge
     // ---------------------------------------------------------------------------------------------
 
-    private fun merge(live: Map<String, TorrentItem>, rows: Map<String, Torrent>, tags: Map<String, List<String>>): List<TorrentItem> {
+    private fun merge(
+        live: Map<String, TorrentItem>,
+        rows: Map<String, Torrent>,
+        tags: Map<String, List<String>>,
+        moving: Set<String>,
+    ): List<TorrentItem> {
         val result = ArrayList<TorrentItem>(live.size + 8)
         for ((id, item) in live) {
             val row = rows[id]
             result += item.copy(
+                // Shown as "moving" (and keeps the Android foreground service alive) while files are copied.
+                state = if (id in moving) TorrentState.MOVING else item.state,
                 category = row?.category,
                 tags = tags[id].orEmpty(),
                 addedAt = row?.added_at?.takeIf { it > 0 } ?: item.addedAt,
@@ -299,19 +309,42 @@ class LocalTorrentController(
         val row = meta.get(event.id)
         if (row == null) meta.ensureExists(event.id, event.name, clock(), item?.savePath.orEmpty())
         val firstTime = meta.markCompleted(event.id, clock())
-        if (!firstTime || !event.fresh) return
-        val size = item?.wantedBytes ?: 0
-        stats.incrementCompleted()
-        history.record(event.id, event.name, size, HistoryEvent.COMPLETED, item?.savePath.orEmpty())
-        eventLog.log(EventType.TORRENT_COMPLETED, event.name, torrentId = event.id)
-        _notices.tryEmit(ControllerNotice.Completed(event.id, event.name))
-        if (item != null) handleCompletionStorage(item)
+        val justCompleted = firstTime && event.fresh
+        if (justCompleted) {
+            val size = item?.wantedBytes ?: 0
+            stats.incrementCompleted()
+            history.record(event.id, event.name, size, HistoryEvent.COMPLETED, item?.savePath.orEmpty())
+            eventLog.log(EventType.TORRENT_COMPLETED, event.name, torrentId = event.id)
+            _notices.tryEmit(ControllerNotice.Completed(event.id, event.name))
+        }
+        if (item == null) return
+        // Also after a restart: a copy that was interrupted (app killed, folder unavailable) is tried again.
+        val pending = !justCompleted && storage.needsRelocation(item, settingsRepository.current())
+        if (!justCompleted && !pending) return
+        if (!markRelocating(item.id)) return
+        // Copying can take minutes: do not hold up the engine's event queue.
+        scope.launch {
+            try {
+                handleCompletionStorage(item)
+            } finally {
+                relocating.update { it - item.id }
+            }
+        }
+    }
+
+    private fun markRelocating(id: String): Boolean {
+        var added = false
+        relocating.update { if (id in it) it else (it + id).also { added = true } }
+        return added
     }
 
     private suspend fun handleCompletionStorage(item: TorrentItem) {
         val settings = settingsRepository.current()
         val files = runCatching { engine.files(item.id) }.getOrDefault(emptyList())
         val result = try {
+            // The last blocks may still be in the engine's write queue when "finished" arrives: get them on
+            // disk before the platform copies or moves the files.
+            engine.flush(item.id)
             storage.afterCompletion(item, files, settings)
         } catch (e: Exception) {
             val error = ErrorMapper.fromException(e)
@@ -354,7 +387,9 @@ class LocalTorrentController(
         checkDestination(request, savePath)
         val extra = if (settings.addPublicTrackers) settings.trackerList else emptyList()
         val id = engine.add(
-            request.copy(startPaused = request.startPaused || settings.startPaused),
+            // The engine needs the real folder: a chosen Android folder arrives here as a content:// URI
+            // and is resolved by the platform storage above.
+            request.copy(savePath = savePath, startPaused = request.startPaused || settings.startPaused),
             savePath,
             extra,
         )

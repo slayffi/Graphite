@@ -102,18 +102,25 @@ class AndroidStorage(private val context: Context) : PlatformStorage {
         return runCatching { StatFs((f ?: internalRoot).absolutePath).availableBytes }.getOrDefault(0L)
     }
 
+    /** The SAF folder a download in [savePath] has to end up in, or null when it stays where it is. */
+    private fun treeTarget(savePath: String, settings: AppSettings): String? {
+        val key = savePath.substringAfter("staging-", "").substringBefore('/').takeIf { savePath.contains("/staging-") }
+        return key?.let { prefs.getString(it, null) } ?: settings.moveCompletedTo.takeIf { it.startsWith("content://") }
+    }
+
+    override fun needsRelocation(item: TorrentItem, settings: AppSettings): Boolean {
+        val target = treeTarget(item.savePath, settings) ?: return false
+        return !(hasAllFilesAccess() && treeToPath(target) == item.savePath)
+    }
+
     override suspend fun afterCompletion(item: TorrentItem, files: List<FileEntry>, settings: AppSettings): CompletionResult {
         val savePath = item.savePath
-        val stagingKey = savePath.substringAfter("staging-", "").substringBefore('/').takeIf { savePath.contains("/staging-") }
-        val stagingTarget = stagingKey?.let { prefs.getString(it, null) }
-        val target = when {
-            stagingTarget != null -> stagingTarget
-            settings.moveCompletedTo.startsWith("content://") -> settings.moveCompletedTo
-            settings.moveCompletedTo.isNotBlank() -> return CompletionResult.MoveTo(settings.moveCompletedTo)
-            else -> return CompletionResult.Keep
+        val target = treeTarget(savePath, settings) ?: return when {
+            settings.moveCompletedTo.isNotBlank() -> CompletionResult.MoveTo(settings.moveCompletedTo)
+            else -> CompletionResult.Keep
         }
         if (hasAllFilesAccess()) {
-            treeToPath(target)?.let { path -> if (path != savePath) return CompletionResult.MoveTo(path) else return CompletionResult.Keep }
+            treeToPath(target)?.let { path -> return if (path != savePath) CompletionResult.MoveTo(path) else CompletionResult.Keep }
         }
         return withContext(Dispatchers.IO) { copyToTree(item, files, target) }
     }

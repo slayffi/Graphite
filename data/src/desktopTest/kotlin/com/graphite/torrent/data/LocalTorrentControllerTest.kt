@@ -27,6 +27,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import java.io.File
@@ -114,6 +115,7 @@ class LocalTorrentControllerTest {
         }.single()
         assertEquals(TorrentState.COMPLETED, archived.state)
         assertEquals("content://tree/$id", archived.finalLocation)
+        assertTrue(id in engine.flushed, "data is flushed to disk before the platform copies the files")
         assertTrue(id !in engine.state.value, "engine no longer tracks the relocated torrent")
 
         c.remove(listOf(id), deleteFiles = false)
@@ -187,6 +189,83 @@ class LocalTorrentControllerTest {
         // Skipping one file makes it fit.
         val id = c.add(AddRequest(AddSource.Preview(meta), filePriorities = mapOf(1 to FilePriority.SKIP)))
         assertTrue(id in engine.state.value)
+        c.stop()
+    }
+
+    @Test
+    fun chosenAndroidFolderIsResolvedBeforeItReachesTheEngine() = runBlocking {
+        // On Android a picked folder is a content:// tree URI; the platform storage maps it to a real folder
+        // (a staging folder, or the direct path with "All files access").
+        val tree = "content://com.android.externalstorage.documents/tree/primary%3AMovies"
+        val staged = File(dir, "staging-movies")
+        val android = object : FileSystemStorage(File(dir, "downloads").absolutePath) {
+            override fun resolveSavePath(chosen: String, settings: AppSettings): String =
+                if (chosen.startsWith("content://")) staged.absolutePath else super.resolveSavePath(chosen, settings)
+        }
+        val c = controller(android)
+        c.start()
+        val id = c.add(AddRequest(AddSource.Magnet(magnet), savePath = tree))
+        assertEquals(staged.absolutePath, engine.lastSavePath)
+        assertEquals(staged.absolutePath, engine.state.value.getValue(id).savePath)
+        assertTrue(staged.isDirectory, "the folder was prepared")
+        c.stop()
+    }
+
+    @Test
+    fun slowCopyKeepsTheDownloadMovingAndIsRetriedAfterRestart() = runBlocking {
+        // Android staging: the finished files are copied to the chosen folder, which can take minutes and can be
+        // interrupted when the system kills the app.
+        val release = kotlinx.coroutines.CompletableDeferred<Unit>()
+        var attempts = 0
+        val staging = object : FileSystemStorage(File(dir, "downloads").absolutePath) {
+            override fun needsRelocation(item: TorrentItem, settings: AppSettings) = true
+            override suspend fun afterCompletion(item: TorrentItem, files: List<FileEntry>, settings: AppSettings): CompletionResult {
+                attempts++
+                release.await()
+                return CompletionResult.Relocated("content://tree/${item.id}")
+            }
+        }
+        val c = controller(staging)
+        c.start()
+        val id = c.add(AddRequest(AddSource.Magnet(magnet)))
+        engine.complete(id)
+        // While the copy runs the item is "moving", which keeps the foreground service alive.
+        withTimeout(5000) { c.torrents.first { list -> list.any { it.id == id && it.state == TorrentState.MOVING } } }
+        // Events keep flowing during the copy (the engine's queue is not blocked).
+        val other = c.add(AddRequest(AddSource.Magnet("magnet:?xt=urn:btih:${"d".repeat(40)}&dn=Other")))
+        withTimeout(5000) { c.torrents.first { list -> list.any { it.id == other } } }
+        assertEquals(1, attempts)
+
+        // The same torrent reported as already complete again (what a restart looks like): no second copy in parallel.
+        engine.eventFlow.tryEmit(com.graphite.torrent.core.engine.EngineEvent.Finished(id, "Sintel", fresh = false))
+        kotlinx.coroutines.delay(300)
+        assertEquals(1, attempts)
+
+        release.complete(Unit)
+        withTimeout(5000) { c.torrents.first { list -> list.any { it.id == id && it.finalLocation != null && it.state == TorrentState.COMPLETED } } }
+        c.stop()
+    }
+
+    @Test
+    fun interruptedRelocationIsRetriedForAlreadyCompletedDownloads() = runBlocking {
+        var attempts = 0
+        val staging = object : FileSystemStorage(File(dir, "downloads").absolutePath) {
+            override fun needsRelocation(item: TorrentItem, settings: AppSettings) = true
+            override suspend fun afterCompletion(item: TorrentItem, files: List<FileEntry>, settings: AppSettings): CompletionResult {
+                attempts++
+                return CompletionResult.Relocated("content://tree/${item.id}")
+            }
+        }
+        val c = controller(staging)
+        c.start()
+        val id = c.add(AddRequest(AddSource.Magnet(magnet)))
+        // Completed in an earlier session (not "fresh"): the staged files still have to be copied.
+        engine.state.update { m -> m + (id to m.getValue(id).copy(state = TorrentState.COMPLETED, progress = 1f)) }
+        engine.eventFlow.tryEmit(com.graphite.torrent.core.engine.EngineEvent.Finished(id, "Sintel", fresh = false))
+        withTimeout(5000) { c.torrents.first { list -> list.any { it.id == id && it.finalLocation != null } } }
+        assertEquals(1, attempts)
+        // No "download complete" notification or statistics for something that was finished before.
+        assertEquals(0, stats.totals(StatsPeriod.DAY).first().completed)
         c.stop()
     }
 }

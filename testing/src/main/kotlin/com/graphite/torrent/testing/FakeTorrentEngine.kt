@@ -63,7 +63,10 @@ class FakeTorrentEngine : TorrentEngine {
 
     override suspend fun add(request: AddRequest, defaultSavePath: String, extraTrackers: List<String>): String {
         lastExtraTrackers = extraTrackers
-        lastSavePath = defaultSavePath
+        // Same rule as LibtorrentEngine: the folder of the request wins, and it must be a real path.
+        val savePath = (request.savePath ?: defaultSavePath).ifBlank { defaultSavePath }
+        if ("://" in savePath) throw GraphiteException(ErrorKind.FOLDER_UNAVAILABLE, savePath)
+        lastSavePath = savePath
         val (id, name) = when (val src = request.source) {
             is AddSource.Magnet -> (MagnetLink.parse(src.uri) ?: throw GraphiteException(ErrorKind.INVALID_TORRENT)).let { it.id to (it.displayName ?: it.id) }
             is AddSource.Preview -> src.metadata.id to src.metadata.name
@@ -73,7 +76,7 @@ class FakeTorrentEngine : TorrentEngine {
             }
         }
         if (id in state.value) throw GraphiteException(ErrorKind.DUPLICATE, name)
-        state.update { it + (id to item(id, name, defaultSavePath)) }
+        state.update { it + (id to item(id, name, savePath)) }
         eventFlow.tryEmit(EngineEvent.Added(id, name))
         return id
     }
@@ -121,4 +124,6 @@ class FakeTorrentEngine : TorrentEngine {
     }
     override fun resumeData(id: String): ByteArray? = resume[id] ?: id.toByteArray()
     override suspend fun saveAllResumeData() {}
+    val flushed = ArrayList<String>()
+    override suspend fun flush(id: String) { flushed += id }
 }

@@ -1,5 +1,6 @@
 package com.graphite.torrent.core.engine
 
+import org.libtorrent4j.alerts.CacheFlushedAlert
 import com.graphite.torrent.core.model.AddRequest
 import com.graphite.torrent.core.model.AddSource
 import com.graphite.torrent.core.model.ErrorKind
@@ -114,6 +115,7 @@ class LibtorrentEngine(
     private val cache = ConcurrentHashMap<String, CachedInfo>()
     private val pendingAdds = ConcurrentHashMap<String, CompletableDeferred<TorrentHandle>>()
     private val pendingResume = ConcurrentHashMap<String, CompletableDeferred<Unit>>()
+    private val pendingFlush = ConcurrentHashMap<String, CompletableDeferred<Unit>>()
     private val lastAllTime = ConcurrentHashMap<String, LongArray>()
 
     private val _torrents = MutableStateFlow<Map<String, TorrentItem>>(emptyMap())
@@ -335,6 +337,19 @@ class LibtorrentEngine(
         }
     }
 
+    override suspend fun flush(id: String) {
+        val handle = handles[id] ?: return
+        val done = CompletableDeferred<Unit>()
+        pendingFlush[id] = done
+        try {
+            withContext(Dispatchers.IO) { handle.flushCache() }
+            // libtorrent answers with cache_flushed_alert once the blocks it held are on disk.
+            withTimeoutOrNull(FLUSH_TIMEOUT_MS) { done.await() }
+        } finally {
+            pendingFlush.remove(id)
+        }
+    }
+
     override suspend fun saveAllResumeData() {
         if (scope == null) return
         val waits = ArrayList<CompletableDeferred<Unit>>()
@@ -376,6 +391,7 @@ class LibtorrentEngine(
             is TorrentFinishedAlert -> onFinished(alert.handle())
             is SaveResumeDataAlert -> onResumeData(alert)
             is SaveResumeDataFailedAlert -> pendingResume.remove(idOf(alert.handle()))?.complete(Unit)
+            is CacheFlushedAlert -> pendingFlush.remove(idOf(alert.handle()))?.complete(Unit)
             is MetadataReceivedAlert -> onMetadata(alert.handle())
             is TorrentErrorAlert -> emitFailure(alert, alert.error(), alert.filename())
             is FileErrorAlert -> emitFailure(alert, alert.error(), alert.filename())
@@ -1157,6 +1173,8 @@ class LibtorrentEngine(
         const val PORT_RANGE_END = 60_000
         private const val IP_FILTER_BLOCKED = 1L
 
+        private const val FLUSH_TIMEOUT_MS = 30_000L
+
         /** Picks a random port in the dynamic range; does not touch native code. */
         fun randomListenPort(): Int = Random.nextInt(PORT_RANGE_START, PORT_RANGE_END)
 
@@ -1166,6 +1184,7 @@ class LibtorrentEngine(
             AlertType.TORRENT_FINISHED.swig(),
             AlertType.SAVE_RESUME_DATA.swig(),
             AlertType.SAVE_RESUME_DATA_FAILED.swig(),
+            AlertType.CACHE_FLUSHED.swig(),
             AlertType.METADATA_RECEIVED.swig(),
             AlertType.TORRENT_ERROR.swig(),
             AlertType.FILE_ERROR.swig(),

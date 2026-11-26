@@ -150,6 +150,9 @@ class EngineIntegrationTest {
 
         val done = engine.awaitItem(id) { it.state == TorrentState.COMPLETED }
         assertEquals(1f, done.progress)
+        // What a platform does before copying a finished download elsewhere: the flush must return (libtorrent
+        // answers with cache_flushed_alert) and the file on disk must then be complete.
+        withTimeout(20_000) { engine.flush(id) }
         assertContentEquals(payload.readBytes(), File(graphiteDownloads, "data.bin").readBytes())
 
         // Zero upload: nothing was sent to the ordinary leecher, even though it is on the "local" network.

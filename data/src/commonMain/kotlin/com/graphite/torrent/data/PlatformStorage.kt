@@ -58,6 +58,12 @@ interface PlatformStorage {
         return if (target.isNotBlank() && File(target).isAbsolute) CompletionResult.MoveTo(target) else CompletionResult.Keep
     }
 
+    /**
+     * True when a completed download still has to be copied somewhere by [afterCompletion] (Android: it sits in
+     * a staging folder). The controller keeps it in the "moving" state meanwhile and retries after a restart.
+     */
+    fun needsRelocation(item: TorrentItem, settings: AppSettings): Boolean = false
+
     /** Deletes files at a location produced by [CompletionResult.Relocated]. */
     suspend fun deleteRelocated(location: String, files: List<String>) {}
 }
