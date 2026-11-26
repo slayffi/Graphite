@@ -91,6 +91,12 @@ jobs:
         with:
           name: graphite-android
           path: apk
+      # The runner image is nearly full (about 5 GB free), the emulator needs more for its data partition.
+      - name: Free disk space for the emulator
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/share/swift \
+            /opt/hostedtoolcache/CodeQL /usr/local/lib/android/sdk/ndk
+          df -h / | tail -1
       - name: Check hardware acceleration (KVM)
         id: kvm
         run: |
@@ -116,6 +122,7 @@ jobs:
           target: aosp_atd
           arch: x86_64
           disable-animations: true
+          disk-size: 3072M
           emulator-boot-timeout: 420
           script: bash tools/android_smoke_test.sh apk/release/android-x86_64-release.apk 240
       - name: Emulator diagnostics
