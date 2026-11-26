@@ -4,6 +4,8 @@ import android.app.ActivityManager
 import android.app.ApplicationExitInfo
 import android.content.Context
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import androidx.annotation.RequiresApi
 import com.graphite.torrent.BuildConfig
@@ -13,7 +15,9 @@ import java.io.StringWriter
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import kotlin.concurrent.thread
 
 /**
  * Finds out why the previous start failed, even when no Java code could react: native crashes in
@@ -29,6 +33,8 @@ object StartupGuard {
     private const val ACK = "startup-ack.txt"
     private const val HEALTHY = "HEALTHY"
     private const val EXCEPTION = "EXCEPTION"
+    private const val HANG_MS = 5_000L
+    private const val WATCH_ROUNDS = 60
 
     private val lock = Any()
     private var dir: File? = null
@@ -47,6 +53,44 @@ object StartupGuard {
         runCatching { marker.writeText("Start ${now()}\n") }
         step("attach")
         return report
+    }
+
+    /**
+     * A frozen start shows only the system splash screen forever (no crash, nothing to catch). This
+     * background thread pings the main thread during the first minute; when it does not answer for
+     * [HANG_MS], it writes where every thread is and opens the report in its own process.
+     */
+    fun watchMainThread(context: Context) {
+        val main = Handler(Looper.getMainLooper())
+        thread(name = "graphite-startup-watchdog", isDaemon = true) {
+            repeat(WATCH_ROUNDS) {
+                val answered = CountDownLatch(1)
+                main.post { answered.countDown() }
+                if (!answered.await(HANG_MS, TimeUnit.MILLISECONDS)) {
+                    val dump = threadDump()
+                    append("$EXCEPTION: main thread did not respond for $HANG_MS ms\n$dump")
+                    val steps = runCatching { dir?.let { File(it, MARKER).readText() } }.getOrNull()
+                    CrashReporter.showFrom(context, buildReport(context, steps, null))
+                    return@thread
+                }
+                Thread.sleep(1_000)
+            }
+        }
+    }
+
+    private fun threadDump(): String = buildString {
+        val all = Thread.getAllStackTraces()
+        val mainThread = Looper.getMainLooper().thread
+        fun dump(t: Thread, trace: Array<StackTraceElement>) {
+            appendLine("\"${t.name}\" ${t.state}")
+            trace.take(40).forEach { appendLine("    at $it") }
+            appendLine()
+        }
+        all[mainThread]?.let { dump(mainThread, it) }
+        all.filterKeys { it !== mainThread && it.name != "graphite-startup-watchdog" }
+            .filterValues { it.isNotEmpty() }
+            .entries.sortedBy { it.key.name }
+            .forEach { (t, trace) -> if (t.state != Thread.State.WAITING || trace.any { "graphite" in it.className || "libtorrent" in it.className }) dump(t, trace) }
     }
 
     /** Records how far the start got. Cheap: one appended line. */

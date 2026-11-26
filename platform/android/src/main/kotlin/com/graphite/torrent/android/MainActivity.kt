@@ -64,6 +64,7 @@ class MainActivity : ComponentActivity(), BridgeHost {
         })
 
         setContent { GraphiteApp(app.env, navigator) }
+        window.decorView.post { StartupGuard.step("first frame posted") }
         lifecycleScope.launch {
             StartupGuard.step("ui")
             // A start that shows the UI and keeps running for a few seconds counts as good.

@@ -5,4 +5,7 @@ enum class PlatformKind { ANDROID, DESKTOP }
 /** The platform the UI runs on: Android shows bottom sheets, desktop shows modal panels and hover states. */
 expect val currentPlatform: PlatformKind
 
-val isDesktop: Boolean get() = currentPlatform == PlatformKind.DESKTOP
+/** Lets tests render the phone layout on the desktop (null = the real platform). */
+var platformOverride: PlatformKind? = null
+
+val isDesktop: Boolean get() = (platformOverride ?: currentPlatform) == PlatformKind.DESKTOP
