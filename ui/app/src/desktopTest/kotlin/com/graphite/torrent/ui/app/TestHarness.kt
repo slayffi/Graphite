@@ -60,7 +60,13 @@ class FakePlatformServices : PlatformServices {
     val opened = ArrayList<String>()
 
     override suspend fun pickTorrentFiles(): List<PickedFile> = emptyList()
-    override suspend fun pickFolder(): String? = null
+    /** What the folder picker returns (null = cancelled). */
+    var folderToPick: String? = null
+    var allFilesSupported = false
+    var allFilesGranted = true
+    var allFilesRequests = 0
+
+    override suspend fun pickFolder(): String? = folderToPick
     override suspend fun pickFile(mimeTypes: List<String>): PickedFile? = null
     override suspend fun pickFilePath(mimeTypes: List<String>): String? = null
     override suspend fun saveFile(suggestedName: String, mimeType: String, bytes: ByteArray) = false
@@ -73,9 +79,9 @@ class FakePlatformServices : PlatformServices {
     override fun shareText(text: String) = Unit
     override fun haptic() = Unit
     override fun displayPath(path: String) = path
-    override val supportsAllFilesAccess = false
-    override fun hasAllFilesAccess() = true
-    override fun requestAllFilesAccess() = Unit
+    override val supportsAllFilesAccess get() = allFilesSupported
+    override fun hasAllFilesAccess() = allFilesGranted
+    override fun requestAllFilesAccess() { allFilesRequests++ }
     override fun requestNotificationPermission() = Unit
     override fun networkInterfaces(): List<NetInterface> = emptyList()
 }

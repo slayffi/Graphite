@@ -101,6 +101,26 @@ class GraphiteAppUiTest {
     }
 
     @Test
+    fun stagedDownloadIsExplainedBeforeAdding() = runDesktopComposeUiTest(1280, 800) {
+        // Android without "all files" access and a folder from the system picker.
+        harness.platform.allFilesSupported = true
+        harness.platform.allFilesGranted = false
+        harness.platform.folderToPick = "content://com.android.externalstorage.documents/tree/primary%3AMovies"
+        launchApp()
+        click(hasText("Add download") and hasClickAction())
+        waitFor(hasSetTextAction())
+        onNode(hasSetTextAction()).performTextInput(MAGNET)
+        click(hasText("Continue") and hasClickAction())
+        waitFor(hasText("What to download"))
+        assertTrue(onAllNodes(hasText("app storage first", substring = true)).fetchSemanticsNodes().isEmpty(), "no hint for a plain folder")
+
+        click(hasText("Change") and hasClickAction())
+        waitFor(hasText("app storage first", substring = true))
+        click(hasText("Allow") and hasClickAction())
+        waitUntil(timeoutMillis = 5_000) { harness.platform.allFilesRequests == 1 }
+    }
+
+    @Test
     fun invalidLinkShowsHumanReadableError() = runDesktopComposeUiTest(1280, 800) {
         launchApp()
         click(hasText("Add download") and hasClickAction())
