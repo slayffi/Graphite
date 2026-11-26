@@ -1,14 +1,27 @@
 name: Build
 
 # Every commit: tests, Android APKs and the Windows MSI.
+# A release (the same builds published on the Releases page) is made by pushing the tag v<version>, or by
+# running this workflow by hand with "release" set; see "Выпуск релиза" in the README.
 on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      release:
+        description: 'GitHub release from this commit'
+        type: choice
+        options: ['no', 'draft', 'publish']
+        default: 'no'
+      temporary_key:
+        description: 'Allow APKs signed with a throw-away key (they cannot be updated later)'
+        type: boolean
+        default: false
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.release || 'no' }}
+  # A newer commit replaces the run of an older one, but nothing interrupts a release.
+  cancel-in-progress: ${{ (inputs.release || 'no') == 'no' && !startsWith(github.ref, 'refs/tags/') }}
 
 permissions:
   contents: read
@@ -184,3 +197,30 @@ jobs:
           name: graphite-windows
           path: platform/desktop/build/compose/binaries/main/msi/*.msi
           retention-days: 30
+
+  # Publishes what the jobs above built and checked; nothing is built here.
+  release:
+    name: GitHub release
+    needs: [tests, android, android-smoke, windows]
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release != 'no')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: graphite-android
+          path: dist/android
+      - uses: actions/download-artifact@v4
+        with:
+          name: graphite-windows
+          path: dist/windows
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODE: ${{ inputs.release }}
+          HAS_KEY: ${{ secrets.GRAPHITE_KEYSTORE_BASE64 != '' }}
+          TEMPORARY_KEY_OK: ${{ inputs.temporary_key }}
+        run: bash tools/make_release.sh

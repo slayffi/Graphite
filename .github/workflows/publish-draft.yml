@@ -1,0 +1,31 @@
+name: Publish draft release
+
+# Makes a draft created by the Build workflow ("release: draft") public without building again.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version of the draft, for example 1.0.0'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: Publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Publish the draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          tag="v${VERSION#v}"
+          id=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq ".[] | select(.tag_name==\"$tag\" and .draft) | .id" | head -1)
+          if [ -z "$id" ]; then
+            echo "::error::No draft release $tag. Run the Build workflow with 'release: draft' first."
+            exit 1
+          fi
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$id" -F draft=false -f make_latest=true --jq '.html_url'
