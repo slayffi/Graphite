@@ -1,6 +1,7 @@
 package com.graphite.torrent.ui.app.remote
 
 import androidx.compose.foundation.Canvas
+import com.graphite.torrent.ui.app.common.rememberAppScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -88,7 +89,7 @@ private fun DesktopRemote(env: AppEnvironment, remote: RemoteFeature) {
     val settings by env.settings.settings.collectAsStateWithLifecycle()
     val payload by remote.pairingPayload.collectAsStateWithLifecycle()
     val clients by remote.connectedClients.collectAsStateWithLifecycle()
-    val scope = rememberCoroutineScope()
+    val scope = rememberAppScope()
     GraphiteCard(Modifier.widthIn(max = 640.dp), contentPadding = GraphiteTheme.spacing.xxs) {
         SwitchSettingRow(
             stringResource(Res.string.remote_allow),
@@ -121,7 +122,7 @@ private fun PhoneRemote(env: AppEnvironment, remote: RemoteFeature, onShowMessag
     val settings by env.settings.settings.collectAsStateWithLifecycle()
     val connected by remote.connected.collectAsStateWithLifecycle()
     val name by remote.remoteName.collectAsStateWithLifecycle()
-    val scope = rememberCoroutineScope()
+    val scope = rememberAppScope()
     val pairing = settings.remotePairing
     suspend fun fail(e: GraphiteException) = onShowMessage(getString(e.error.kind.titleRes()) + ". " + getString(e.error.kind.adviceRes()))
 

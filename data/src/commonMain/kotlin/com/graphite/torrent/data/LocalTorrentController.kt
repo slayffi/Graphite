@@ -38,6 +38,7 @@ import com.graphite.torrent.data.repo.HistoryRepository
 import com.graphite.torrent.data.repo.StatsRepository
 import com.graphite.torrent.data.repo.TorrentMetaRepository
 import com.graphite.torrent.data.settings.SettingsRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -556,14 +557,23 @@ class LocalTorrentController(
     private suspend fun updateTrackersPeriodically() {
         while (scope.isActive) {
             val s = settingsRepository.current()
+            var wait = TRACKER_CHECK_INTERVAL_MS
             if (s.trackersAutoUpdate && clock() - s.trackersUpdatedAt > TRACKER_UPDATE_INTERVAL_MS) {
-                updateTrackerList()
+                try {
+                    updateTrackerList()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    // No network, the list is blocked by the provider, a TLS problem...: already written to
+                    // the event log. The built-in trackers keep working; try again a bit later.
+                    wait = TRACKER_RETRY_INTERVAL_MS
+                }
             }
-            delay(TRACKER_CHECK_INTERVAL_MS)
+            delay(wait)
         }
     }
 
-    /** Downloads the public tracker list now. Returns the number of trackers or throws. */
+    /** Downloads the public tracker list now. Returns the number of trackers or throws [GraphiteException]. */
     suspend fun updateTrackerList(): Int {
         val s = settingsRepository.current()
         return try {
@@ -572,6 +582,8 @@ class LocalTorrentController(
             settingsRepository.update { it.copy(trackerList = list, trackersUpdatedAt = clock()) }
             eventLog.log(EventType.TRACKERS_UPDATED, list.size.toString())
             list.size
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             val error = ErrorMapper.fromException(e)
             eventLog.error(EventType.TRACKERS_UPDATE_FAILED, s.trackerSources.joinToString(), error)
@@ -602,5 +614,6 @@ class LocalTorrentController(
         const val INTERFACE_POLL_MS = 3_000L
         const val TRACKER_UPDATE_INTERVAL_MS = 24L * 60 * 60 * 1000
         const val TRACKER_CHECK_INTERVAL_MS = 60L * 60 * 1000
+        const val TRACKER_RETRY_INTERVAL_MS = 15L * 60 * 1000
     }
 }

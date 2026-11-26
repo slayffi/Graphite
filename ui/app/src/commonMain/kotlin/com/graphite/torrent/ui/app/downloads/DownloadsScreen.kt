@@ -1,6 +1,7 @@
 package com.graphite.torrent.ui.app.downloads
 
 import androidx.compose.animation.AnimatedVisibility
+import com.graphite.torrent.ui.app.common.rememberAppScope
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -411,7 +412,7 @@ private fun TorrentRow(
     modifier: Modifier = Modifier,
 ) {
     val colors = GraphiteTheme.colors
-    val scope = rememberCoroutineScope()
+    val scope = rememberAppScope()
     val swipe = remember { Animatable(0f) }
     val density = LocalDensity.current
     val threshold = with(density) { 96.dp.toPx() }

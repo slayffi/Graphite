@@ -1,6 +1,11 @@
 package com.graphite.torrent.ui.app
 
+import com.graphite.torrent.ui.app.common.LocalErrorHandler
+import com.graphite.torrent.core.model.GraphiteException
+import com.graphite.torrent.core.model.EventType
+import com.graphite.torrent.core.engine.ErrorMapper
 import androidx.compose.animation.AnimatedContent
+import com.graphite.torrent.ui.app.common.rememberAppScope
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -101,7 +106,9 @@ fun GraphiteApp(
             var splashDone by remember { mutableStateOf(!showSplash) }
             LaunchedEffect(splashDone) { if (splashDone) onContentShown() }
             Box(Modifier.fillMaxSize().background(GraphiteTheme.colors.bg)) {
-                AppContent(env, navigator, extraScreens)
+                CompositionLocalProvider(LocalErrorHandler provides env.errorHandler) {
+                    AppContent(env, navigator, extraScreens)
+                }
                 AnimatedVisibility(!splashDone, enter = fadeIn(), exit = fadeOut(tween(GraphiteTheme.motion.duration(300)))) {
                     Box(Modifier.fillMaxSize().background(GraphiteTheme.colors.bg), contentAlignment = Alignment.Center) {
                         AnimatedCrystalLogo(size = 120.dp, onFinished = { splashDone = true })
@@ -133,7 +140,7 @@ private fun AppContent(
     extraScreens: @Composable (Destination, () -> Unit) -> Boolean,
 ) {
     val snackbar = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
+    val scope = rememberAppScope()
     val addViewModel = viewModel { AddViewModel(env) }
     val downloadsViewModel = viewModel { DownloadsViewModel(env) }
     var showAdd by remember { mutableStateOf(false) }
@@ -180,6 +187,15 @@ private fun AppContent(
                 is ControllerNotice.Moved -> getString(Res.string.notice_moved, notice.name)
             }
             snackbar.showSnackbar(text)
+        }
+    }
+
+    // Unexpected failures of user actions: say what happened instead of crashing.
+    LaunchedEffect(Unit) {
+        env.uiErrors.collect { e ->
+            val error = (e as? GraphiteException)?.error ?: ErrorMapper.fromException(e)
+            runCatching { env.eventLog.error(EventType.INTERNAL_ERROR, e::class.simpleName.orEmpty(), error) }
+            snackbar.showSnackbar(getString(error.kind.titleRes()) + ". " + getString(error.kind.adviceRes()))
         }
     }
 

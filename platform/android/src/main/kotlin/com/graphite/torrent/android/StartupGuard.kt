@@ -47,10 +47,14 @@ object StartupGuard {
         val files = context.noBackupFilesDir.apply { mkdirs() }
         dir = files
         val marker = File(files, MARKER)
-        val previous = runCatching { marker.takeIf { it.exists() }?.readText() }.getOrNull()
+        // Failures of an older build say nothing about this one: after an update start with a clean slate.
+        val installedAt = runCatching { context.packageManager.getPackageInfo(context.packageName, 0).lastUpdateTime }.getOrDefault(0L)
+        val stale = marker.exists() && marker.lastModified() < installedAt
+        val previous = if (stale) null else runCatching { marker.takeIf { it.exists() }?.readText() }.getOrNull()
         // A safe-mode start only shows the report: it never becomes "healthy" but is not a failure.
         val previousFailed = previous != null && SAFE_MODE !in previous && (HEALTHY !in previous || EXCEPTION in previous)
-        val exit = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) runCatching { lastAbnormalExit(context, lastAck(files)) }.getOrNull() else null
+        val since = maxOf(lastAck(files), installedAt)
+        val exit = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) runCatching { lastAbnormalExit(context, since) }.getOrNull() else null
 
         val report = if (previousFailed || exit != null) buildReport(context, previous, exit) else null
         runCatching { marker.writeText("Start ${now()}\n") }

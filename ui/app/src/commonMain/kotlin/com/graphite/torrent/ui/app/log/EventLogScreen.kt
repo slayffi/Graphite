@@ -1,6 +1,7 @@
 package com.graphite.torrent.ui.app.log
 
 import androidx.compose.foundation.layout.Arrangement
+import com.graphite.torrent.ui.app.common.rememberAppScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -41,7 +42,7 @@ import org.jetbrains.compose.resources.stringResource
 @Composable
 fun EventLogScreen(env: AppEnvironment, onBack: () -> Unit, modifier: Modifier = Modifier) {
     val entries by env.eventLog.recent(500).collectAsStateWithLifecycle(emptyList())
-    val scope = rememberCoroutineScope()
+    val scope = rememberAppScope()
     val spacing = GraphiteTheme.spacing
     Column(modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(spacing.xs), verticalAlignment = Alignment.CenterVertically) {
@@ -117,4 +118,5 @@ private fun EventType.textRes(): StringResource = when (this) {
     EventType.REMOTE_CLIENT -> Res.string.log_remote_client
     EventType.SETTINGS_IMPORTED -> Res.string.log_settings_imported
     EventType.SETTINGS_EXPORTED -> Res.string.log_settings_exported
+    EventType.INTERNAL_ERROR -> Res.string.log_internal_error
 }

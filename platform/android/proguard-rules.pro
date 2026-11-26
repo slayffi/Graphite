@@ -18,3 +18,7 @@
 -dontwarn com.google.zxing.**
 -dontwarn java.awt.**
 -dontwarn javax.imageio.**
+
+# Room creates the generated *_Impl database by reflection (WorkManager's WorkDatabase, used by the
+# Glance widget). Old Room rules keep the class but not its constructor, which R8 full mode removes.
+-keep class * extends androidx.room.RoomDatabase { <init>(); }

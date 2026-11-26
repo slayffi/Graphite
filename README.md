@@ -65,9 +65,11 @@
 
 **Linux.** libtorrent4j подменяет обработчик SIGSEGV, поэтому JVM на Linux запускается с `LD_PRELOAD=$JAVA_HOME/lib/libjsig.so` — Gradle-задачи `run` и `test` делают это автоматически. На Windows (целевая платформа) это не нужно.
 
+**Проверка запуска на Android.** `tools/android_smoke_test.sh <apk>` ставит APK на подключённый эмулятор или телефон, запускает Graphite и проверяет, что процесс жив, первый экран показан и в журнале нет падений. Запускайте её на **релизном** APK: ошибки R8 и падения в инициализаторах библиотек не видны в JVM-тестах (так однажды уже было: старый WorkManager, который тянет Glance, падал в релизе до старта приложения).
+
 ### CI
 
-[`.github/workflows/build.yml`](.github/workflows/build.yml) на каждый коммит: тесты на Ubuntu, APK на Ubuntu, MSI на Windows (с libVLC). Артефакты: `graphite-android`, `graphite-windows`, `test-reports`. Для подписанного релиза добавьте секреты `GRAPHITE_KEYSTORE_BASE64`, `GRAPHITE_KEYSTORE_PASSWORD`, `GRAPHITE_KEY_ALIAS`, `GRAPHITE_KEY_PASSWORD`.
+[`.github/workflows/build.yml`](.github/workflows/build.yml) на каждый коммит: тесты на Ubuntu, APK на Ubuntu (релизный APK запускается на эмуляторе Android 14 — если он не стартует, сборка падает), MSI на Windows (с libVLC). Артефакты: `graphite-android`, `graphite-windows`, `test-reports`. Для подписанного релиза добавьте секреты `GRAPHITE_KEYSTORE_BASE64`, `GRAPHITE_KEYSTORE_PASSWORD`, `GRAPHITE_KEY_ALIAS`, `GRAPHITE_KEY_PASSWORD`.
 
 ## Архитектура
 
@@ -133,6 +135,7 @@ testing              фейковый движок для тестов data и U
 | `ui:app` | сценарии в настоящем `GraphiteApp`: первое добавление magnet с предпросмотром, битая ссылка, нехватка места, фильтры и пауза, удаление с подтверждением, поиск в настройках и нулевая отдача; рендер экранов на русском (скриншоты README) |
 | `ui:designsystem` | форматирование размеров, скоростей и времени; галерея компонентов |
 | `platform:desktop` | декодирование видео через libVLC (пропускается, если libVLC или ffmpeg не установлены) |
+| `tools/android_smoke_test.sh` | релизный APK на эмуляторе: приложение стартует, показывает экран загрузок и не падает |
 
 Ручная проверка — [`docs/MANUAL_TESTING.md`](docs/MANUAL_TESTING.md).
 

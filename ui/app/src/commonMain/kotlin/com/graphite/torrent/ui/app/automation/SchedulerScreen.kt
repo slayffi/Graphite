@@ -1,6 +1,7 @@
 package com.graphite.torrent.ui.app.automation
 
 import androidx.compose.foundation.layout.Arrangement
+import com.graphite.torrent.ui.app.common.rememberAppScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -88,7 +89,7 @@ fun SchedulerScreen(env: AppEnvironment, scheduler: SchedulerService, onBack: ()
     val rules by scheduler.rules.collectAsStateWithLifecycle(emptyList())
     val settings by env.settings.settings.collectAsStateWithLifecycle()
     val decision by scheduler.decision.collectAsStateWithLifecycle()
-    val scope = rememberCoroutineScope()
+    val scope = rememberAppScope()
     var editing by remember { mutableStateOf<ScheduleRule?>(null) }
     val spacing = GraphiteTheme.spacing
 

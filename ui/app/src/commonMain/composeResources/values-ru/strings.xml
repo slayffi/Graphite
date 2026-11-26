@@ -133,6 +133,7 @@
     <string name="log_engine_started">Движок запущен %1$s</string>
     <string name="log_engine_stopped">Движок остановлен %1$s</string>
     <string name="log_error">Ошибка: %1$s</string>
+    <string name="log_internal_error">Внутренняя ошибка: %1$s</string>
     <string name="log_ip_filter_failed">IP-фильтр не загружен: %1$s</string>
     <string name="log_ip_filter_loaded">IP-фильтр загружен: %1$s</string>
     <string name="log_kill_switch_off">VPN снова доступен (%1$s), загрузки продолжены</string>

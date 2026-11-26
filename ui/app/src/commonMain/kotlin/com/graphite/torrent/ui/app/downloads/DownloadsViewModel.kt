@@ -111,7 +111,7 @@ class DownloadsViewModel(private val env: AppEnvironment) : ViewModel() {
     }.stateIn(viewModelScope, SharingStarted.Eagerly, DownloadsUiState())
 
     init {
-        viewModelScope.launch {
+        viewModelScope.launch(env.errorHandler) {
             kotlinx.coroutines.delay(1500)
             loaded.value = true
         }
@@ -128,7 +128,7 @@ class DownloadsViewModel(private val env: AppEnvironment) : ViewModel() {
     fun clearSelection() = selection.update { emptySet() }
 
     private fun launchAction(block: suspend () -> Unit) {
-        viewModelScope.launch {
+        viewModelScope.launch(env.errorHandler) {
             try {
                 block()
             } catch (e: GraphiteException) {

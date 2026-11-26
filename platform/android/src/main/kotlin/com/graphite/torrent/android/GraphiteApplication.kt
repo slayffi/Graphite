@@ -1,6 +1,8 @@
 package com.graphite.torrent.android
 
 import android.app.Application
+import androidx.work.Configuration
+import android.util.Log
 import com.graphite.torrent.core.settings.DiskIoMode
 import com.graphite.torrent.core.engine.NativeLibraries
 import android.content.Context
@@ -21,7 +23,7 @@ import kotlinx.coroutines.launch
 import java.io.File
 
 /** Owns the engine for the whole process lifetime; the UI, the service, the widget and the tile attach to it. */
-class GraphiteApplication : Application() {
+class GraphiteApplication : Application(), Configuration.Provider {
     lateinit var services: GraphiteServices
         private set
     lateinit var env: AppEnvironment
@@ -43,9 +45,16 @@ class GraphiteApplication : Application() {
     @Volatile var ready = false
         private set
 
+    /** WorkManager is initialized lazily with this (see the manifest); only the widget needs it. */
+    override val workManagerConfiguration: Configuration
+        get() = Configuration.Builder().setMinimumLoggingLevel(Log.ERROR).build()
+
     override fun attachBaseContext(base: Context) {
         super.attachBaseContext(base)
         if (CrashReporter.isCrashProcess()) return
+        // First of all: library initializers (content providers) run before onCreate, and a crash there
+        // must be recorded too.
+        CrashReporter.install(this)
         // Runs before content providers and onCreate, so even very early failures are caught next time.
         // The watchdog goes first: everything after it, StartupGuard included, is covered.
         StartupGuard.watchMainThread(base)
@@ -57,7 +66,6 @@ class GraphiteApplication : Application() {
         super.onCreate()
         // The crash screen runs in its own process and needs none of the services.
         if (CrashReporter.isCrashProcess()) return
-        CrashReporter.install(this)
         StartupGuard.step("onCreate")
         if (safeModeReport != null) {
             // The previous start failed: MainActivity shows the report instead of starting the engine again.

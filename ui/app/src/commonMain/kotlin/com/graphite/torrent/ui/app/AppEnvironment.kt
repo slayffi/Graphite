@@ -8,6 +8,7 @@ import com.graphite.torrent.data.repo.StatsRepository
 import com.graphite.torrent.data.repo.TorrentMetaRepository
 import com.graphite.torrent.data.settings.SettingsRepository
 import com.graphite.torrent.ui.designsystem.platform.PlatformKind
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -96,6 +97,17 @@ class AppEnvironment(
 
     /** Pending dialog requests from outside the UI tree (tray "Add", hotkeys). */
     val openAddSheet = MutableStateFlow(false)
+
+    private val _uiErrors = MutableSharedFlow<Throwable>(extraBufferCapacity = 16)
+
+    /** Unexpected failures of user actions; shown as a message instead of crashing (Android kills the app otherwise). */
+    val uiErrors: SharedFlow<Throwable> = _uiErrors.asSharedFlow()
+
+    /** Add to every coroutine started from the UI: `viewModelScope.launch(env.errorHandler) { … }`. */
+    val errorHandler = CoroutineExceptionHandler { _, e ->
+        e.printStackTrace()
+        _uiErrors.tryEmit(e)
+    }
 
     fun submit(request: IncomingRequest) {
         _incoming.tryEmit(request)

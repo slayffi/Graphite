@@ -1,6 +1,7 @@
 package com.graphite.torrent.ui.app.automation
 
 import androidx.compose.foundation.layout.Arrangement
+import com.graphite.torrent.ui.app.common.rememberAppScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -55,7 +56,7 @@ fun RssScreen(env: AppEnvironment, rss: RssService, onBack: () -> Unit, onShowMe
     val rules by rss.rules.collectAsStateWithLifecycle(emptyList())
     val items by rss.recentItems.collectAsStateWithLifecycle(emptyList())
     val settings by env.settings.settings.collectAsStateWithLifecycle()
-    val scope = rememberCoroutineScope()
+    val scope = rememberAppScope()
     var newFeed by remember { mutableStateOf("") }
     var editing by remember { mutableStateOf<RssRule?>(null) }
     val spacing = GraphiteTheme.spacing

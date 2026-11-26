@@ -37,6 +37,9 @@ enum class EventType {
     REMOTE_CLIENT,
     SETTINGS_IMPORTED,
     SETTINGS_EXPORTED,
+
+    /** An unexpected failure in a background job; the app keeps running. */
+    INTERNAL_ERROR,
 }
 
 @Serializable

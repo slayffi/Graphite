@@ -203,6 +203,7 @@ S = {
  "log_session_paused": ("All downloads paused: %1$s", "Все загрузки на паузе: %1$s"),
  "log_session_resumed": ("Downloads resumed %1$s", "Загрузки продолжены %1$s"),
  "log_settings_exported": ("Settings exported %1$s", "Настройки экспортированы %1$s"),
+ "log_internal_error": ("Internal error: %1$s", "Внутренняя ошибка: %1$s"),
  "log_settings_imported": ("Settings imported %1$s", "Настройки импортированы %1$s"),
  "log_trackers_failed": ("Tracker list not updated: %1$s", "Список трекеров не обновлён: %1$s"),
  "log_trackers_updated": ("Tracker list updated: %1$s", "Список трекеров обновлён: %1$s"),

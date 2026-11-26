@@ -15,6 +15,7 @@ import android.view.View
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.widget.Button
+import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -101,9 +102,7 @@ object ReportScreen {
         val pad = dp(16)
         val root = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(BG)
-            setPadding(pad, pad + dp(24), pad, pad + dp(16))
-            fitsSystemWindows = true
+            setPadding(pad, pad, pad, pad)
         }
         root.addView(text(activity.getString(R.string.crash_title), 20f, TEXT, bold = true))
         root.addView(text(activity.getString(R.string.crash_message), 14f, SECONDARY).apply { setPadding(0, dp(8), 0, dp(16)) })
@@ -143,6 +142,12 @@ object ReportScreen {
             Toast.makeText(activity, R.string.crash_copied, Toast.LENGTH_SHORT).show()
         })
         root.addView(buttons)
-        return root
+        // The outer frame takes the system bar insets (edge-to-edge activity); fitsSystemWindows would
+        // replace the padding if it were set on the padded layout itself.
+        return FrameLayout(activity).apply {
+            setBackgroundColor(BG)
+            fitsSystemWindows = true
+            addView(root, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+        }
     }
 }

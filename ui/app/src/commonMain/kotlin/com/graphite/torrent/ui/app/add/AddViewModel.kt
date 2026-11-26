@@ -63,7 +63,7 @@ class AddViewModel(private val env: AppEnvironment) : ViewModel() {
     private var job: Job? = null
 
     init {
-        viewModelScope.launch {
+        viewModelScope.launch(env.errorHandler) {
             val settings = env.settings.current()
             val path = env.controller.defaultSavePath()
             _options.update {
@@ -109,7 +109,7 @@ class AddViewModel(private val env: AppEnvironment) : ViewModel() {
     }
 
     fun pickFile() {
-        viewModelScope.launch {
+        viewModelScope.launch(env.errorHandler) {
             val files = runCatching { env.platform.pickTorrentFiles() }.getOrDefault(emptyList())
             when {
                 files.isEmpty() -> Unit
@@ -120,7 +120,7 @@ class AddViewModel(private val env: AppEnvironment) : ViewModel() {
     }
 
     fun scanQr() {
-        viewModelScope.launch {
+        viewModelScope.launch(env.errorHandler) {
             val text = runCatching { env.platform.scanQr() }.getOrNull() ?: return@launch
             val magnet = MagnetLink.findInText(text)
             if (magnet != null) openMagnet(magnet) else _step.value = AddStep.Failed(TorrentError(ErrorKind.INVALID_TORRENT, text.take(80)), null)
@@ -131,7 +131,7 @@ class AddViewModel(private val env: AppEnvironment) : ViewModel() {
         job?.cancel()
         val name = MagnetLink.parse(uri)?.displayName ?: uri.take(60)
         _step.value = AddStep.Loading(name, uri)
-        job = viewModelScope.launch {
+        job = viewModelScope.launch(env.errorHandler) {
             try {
                 showPreview(env.controller.previewMagnet(uri))
             } catch (e: GraphiteException) {
@@ -152,7 +152,7 @@ class AddViewModel(private val env: AppEnvironment) : ViewModel() {
     private fun openTorrentFile(name: String, bytes: ByteArray) {
         job?.cancel()
         _step.value = AddStep.Loading(name, null)
-        job = viewModelScope.launch {
+        job = viewModelScope.launch(env.errorHandler) {
             try {
                 showPreview(env.controller.previewTorrentFile(bytes))
             } catch (e: GraphiteException) {
@@ -164,7 +164,7 @@ class AddViewModel(private val env: AppEnvironment) : ViewModel() {
     }
 
     private fun addManyFiles(files: List<ByteArray>) {
-        viewModelScope.launch {
+        viewModelScope.launch(env.errorHandler) {
             var lastError: TorrentError? = null
             for (bytes in files) {
                 try {
@@ -206,7 +206,7 @@ class AddViewModel(private val env: AppEnvironment) : ViewModel() {
     fun setStartPaused(v: Boolean) = _options.update { it.copy(startPaused = v) }
 
     fun chooseFolder() {
-        viewModelScope.launch {
+        viewModelScope.launch(env.errorHandler) {
             val folder = env.platform.pickFolder() ?: return@launch
             _options.update { it.copy(savePath = folder, displayPath = env.platform.displayPath(folder)) }
             refreshFreeSpace()
@@ -236,7 +236,7 @@ class AddViewModel(private val env: AppEnvironment) : ViewModel() {
     }
 
     private fun add(source: AddSource) {
-        viewModelScope.launch {
+        viewModelScope.launch(env.errorHandler) {
             try {
                 env.controller.add(requestFor(source, _options.value.priorities))
                 _step.value = AddStep.Done

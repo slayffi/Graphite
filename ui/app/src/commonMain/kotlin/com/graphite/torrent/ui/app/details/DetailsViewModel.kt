@@ -57,7 +57,7 @@ class DetailsViewModel(private val env: AppEnvironment, val torrentId: String) :
     init {
         startPolling()
         // Files are needed by the overview too (playable files), load them once immediately.
-        viewModelScope.launch { refresh(DetailsTab.FILES) }
+        viewModelScope.launch(env.errorHandler) { refresh(DetailsTab.FILES) }
     }
 
     fun selectTab(tab: DetailsTab) {
@@ -67,7 +67,7 @@ class DetailsViewModel(private val env: AppEnvironment, val torrentId: String) :
 
     private fun startPolling() {
         poller?.cancel()
-        poller = viewModelScope.launch {
+        poller = viewModelScope.launch(env.errorHandler) {
             while (isActive) {
                 refresh(_tab.value)
                 delay(POLL_MS)
@@ -90,7 +90,7 @@ class DetailsViewModel(private val env: AppEnvironment, val torrentId: String) :
     }
 
     private fun action(block: suspend () -> Unit) {
-        viewModelScope.launch {
+        viewModelScope.launch(env.errorHandler) {
             try {
                 block()
                 refresh(_tab.value)

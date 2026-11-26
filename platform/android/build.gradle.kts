@@ -85,6 +85,9 @@ dependencies {
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.ui)
     implementation(libs.glance.appwidget)
+    // Glance only asks for WorkManager 2.7.1 / Room 2.2.5, whose shrinker rules predate R8 full mode:
+    // the release build then crashes at process start inside WorkManager's initializer.
+    implementation(libs.androidx.work.runtime)
     implementation(libs.libtorrent4j.android.arm64)
     implementation(libs.libtorrent4j.android.arm)
     implementation(libs.libtorrent4j.android.x86.x64)

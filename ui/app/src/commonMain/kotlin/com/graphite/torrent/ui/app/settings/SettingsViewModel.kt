@@ -50,7 +50,7 @@ class SettingsViewModel(private val env: AppEnvironment) : ViewModel() {
     val defaultFolder: StateFlow<String> = _defaultFolder.asStateFlow()
 
     init {
-        viewModelScope.launch {
+        viewModelScope.launch(env.errorHandler) {
             settings.collect { _defaultFolder.value = env.platform.displayPath(env.controller.defaultSavePath()) }
         }
     }
@@ -63,11 +63,11 @@ class SettingsViewModel(private val env: AppEnvironment) : ViewModel() {
     }
 
     fun update(transform: (AppSettings) -> AppSettings) {
-        viewModelScope.launch { env.settings.update(transform) }
+        viewModelScope.launch(env.errorHandler) { env.settings.update(transform) }
     }
 
     fun refreshInterfaces() {
-        viewModelScope.launch {
+        viewModelScope.launch(env.errorHandler) {
             _interfaces.value = withContext(Dispatchers.IO) { env.platform.networkInterfaces() }
         }
     }
@@ -79,7 +79,7 @@ class SettingsViewModel(private val env: AppEnvironment) : ViewModel() {
     fun requestAllFilesAccess() = env.platform.requestAllFilesAccess()
 
     fun pickDefaultFolder() {
-        viewModelScope.launch {
+        viewModelScope.launch(env.errorHandler) {
             val folder = env.platform.pickFolder() ?: return@launch
             if (folder.startsWith("content://")) {
                 env.settings.update { it.copy(androidTreeUri = folder) }
@@ -90,21 +90,21 @@ class SettingsViewModel(private val env: AppEnvironment) : ViewModel() {
     }
 
     fun pickMoveCompletedFolder() {
-        viewModelScope.launch {
+        viewModelScope.launch(env.errorHandler) {
             val folder = env.platform.pickFolder() ?: return@launch
             env.settings.update { it.copy(moveCompletedTo = folder) }
         }
     }
 
     fun pickWatchFolder() {
-        viewModelScope.launch {
+        viewModelScope.launch(env.errorHandler) {
             val folder = env.platform.pickFolder() ?: return@launch
             env.settings.update { it.copy(watchFolderPath = folder, watchFolderEnabled = true) }
         }
     }
 
     fun pickIpFilter() {
-        viewModelScope.launch {
+        viewModelScope.launch(env.errorHandler) {
             val path = env.platform.pickFilePath(listOf("text/plain", "application/octet-stream", "*/*")) ?: return@launch
             env.settings.update { it.copy(ipFilterPath = path, ipFilterEnabled = true) }
         }
@@ -113,7 +113,7 @@ class SettingsViewModel(private val env: AppEnvironment) : ViewModel() {
     fun displayPath(path: String): String = if (path.isBlank()) "" else env.platform.displayPath(path)
 
     fun updateTrackersNow() {
-        viewModelScope.launch {
+        viewModelScope.launch(env.errorHandler) {
             _busy.value = true
             try {
                 _messages.tryEmit(SettingsMessage.TrackersUpdated(env.local.updateTrackerList()))
@@ -133,7 +133,7 @@ class SettingsViewModel(private val env: AppEnvironment) : ViewModel() {
 
     fun exportBackup() {
         val backup = env.features.backup ?: return
-        viewModelScope.launch {
+        viewModelScope.launch(env.errorHandler) {
             val ok = runCatching {
                 env.platform.saveFile("graphite-backup.json", "application/json", backup.export())
             }.getOrDefault(false)
@@ -143,7 +143,7 @@ class SettingsViewModel(private val env: AppEnvironment) : ViewModel() {
 
     fun importBackup() {
         val backup = env.features.backup ?: return
-        viewModelScope.launch {
+        viewModelScope.launch(env.errorHandler) {
             val file = env.platform.pickFile(listOf("application/json", "*/*")) ?: return@launch
             try {
                 _messages.tryEmit(SettingsMessage.Imported(backup.import(file.bytes)))

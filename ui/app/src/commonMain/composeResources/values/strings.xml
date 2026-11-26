@@ -133,6 +133,7 @@
     <string name="log_engine_started">Engine started %1$s</string>
     <string name="log_engine_stopped">Engine stopped %1$s</string>
     <string name="log_error">Error: %1$s</string>
+    <string name="log_internal_error">Internal error: %1$s</string>
     <string name="log_ip_filter_failed">IP filter not loaded: %1$s</string>
     <string name="log_ip_filter_loaded">IP filter loaded: %1$s</string>
     <string name="log_kill_switch_off">VPN is back (%1$s), downloads resumed</string>
